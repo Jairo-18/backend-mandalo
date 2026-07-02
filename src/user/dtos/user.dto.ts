@@ -126,6 +126,36 @@ export class RegisterUserDto {
   @IsString()
   @MaxLength(30)
   phone?: string;
+
+  @ApiPropertyOptional({ description: 'ID del municipio', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  municipalityId?: number;
+
+  @ApiPropertyOptional({ description: 'ID del departamento', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  departmentId?: number;
+
+  @ApiPropertyOptional({ example: 'Calle 1 # 2-3' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  address?: string;
+
+  @ApiPropertyOptional({ example: '1090123456' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  identificationNumber?: string;
+
+  @ApiPropertyOptional({ description: 'ID del tipo de identificación', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  identificationTypeId?: number;
 }
 
 /**

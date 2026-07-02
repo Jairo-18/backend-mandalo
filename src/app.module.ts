@@ -10,6 +10,7 @@ import { SharedModule } from './shared/shared.module';
 import { ApiKeyGuard } from './shared/guards/api-key.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { CatalogModule } from './catalog/catalog.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -33,6 +34,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     AuthModule,
     UserModule,
+    CatalogModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

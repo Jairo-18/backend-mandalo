@@ -11,6 +11,7 @@ import { Exclude } from 'class-transformer';
 import { RoleType } from './roleType.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
+import { IdentificationType } from './identificationType.entity';
 
 @Entity({ name: 'user' })
 export class User {
@@ -62,6 +63,10 @@ export class User {
 
   @Column('int', { nullable: true })
   identificationTypeId?: number;
+
+  @ManyToOne(() => IdentificationType, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'identificationTypeId' })
+  identificationType?: IdentificationType;
 
   @Exclude()
   @Column('varchar', { length: 2000, nullable: true })

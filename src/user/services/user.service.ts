@@ -11,6 +11,7 @@ import { UserRepository } from '../../shared/repositories/user.repository';
 import { RoleTypeRepository } from '../../shared/repositories/roleType.repository';
 import { MunicipalityRepository } from '../../shared/repositories/municipality.repository';
 import { DepartmentRepository } from '../../shared/repositories/department.repository';
+import { IdentificationTypeRepository } from '../../shared/repositories/identificationType.repository';
 import { User } from '../../shared/entities/user.entity';
 import { NOT_FOUND_MESSAGE } from '../../shared/constants/messages.constant';
 import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
@@ -25,6 +26,7 @@ export class UserService {
     private readonly _roleTypeRepository: RoleTypeRepository,
     private readonly _municipalityRepository: MunicipalityRepository,
     private readonly _departmentRepository: DepartmentRepository,
+    private readonly _identificationTypeRepository: IdentificationTypeRepository,
   ) {}
 
   async findOne(id: string): Promise<User> {
@@ -68,6 +70,8 @@ export class UserService {
         `El rol "${roleCode}" no está configurado en la base de datos`,
       );
     }
+
+    await this.assertRelationsExist(dto);
 
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const user = this._userRepository.create({
@@ -147,6 +151,14 @@ export class UserService {
       });
       if (!department)
         throw new NotFoundException('Departamento no encontrado');
+    }
+
+    if (dto.identificationTypeId) {
+      const identificationType = await this._identificationTypeRepository.findOne(
+        { where: { id: dto.identificationTypeId } },
+      );
+      if (!identificationType)
+        throw new NotFoundException('Tipo de identificación no encontrado');
     }
   }
 }

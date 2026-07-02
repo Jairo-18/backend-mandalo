@@ -10,12 +10,14 @@ import { Organizational } from './entities/organizational.entity';
 import { RoleType } from './entities/roleType.entity';
 import { Department } from './entities/department.entity';
 import { Municipality } from './entities/municipality.entity';
+import { IdentificationType } from './entities/identificationType.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
 import { RoleTypeRepository } from './repositories/roleType.repository';
 import { DepartmentRepository } from './repositories/department.repository';
 import { MunicipalityRepository } from './repositories/municipality.repository';
+import { IdentificationTypeRepository } from './repositories/identificationType.repository';
 
 @Module({})
 export class SharedModule {
@@ -69,6 +71,7 @@ export class SharedModule {
           RoleType,
           Department,
           Municipality,
+          IdentificationType,
         ]),
 
         PassportModule,
@@ -92,6 +95,7 @@ export class SharedModule {
         RoleTypeRepository,
         DepartmentRepository,
         MunicipalityRepository,
+        IdentificationTypeRepository,
       ],
       exports: [
         JwtModule,
@@ -103,6 +107,7 @@ export class SharedModule {
         RoleTypeRepository,
         DepartmentRepository,
         MunicipalityRepository,
+        IdentificationTypeRepository,
       ],
     };
   }

@@ -7,8 +7,8 @@ WORKDIR /app
 # Install pnpm (misma versión que generó el lockfile)
 RUN npm install -g pnpm@11.5.0
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Copy package files (pnpm-workspace.yaml incluye allowBuilds → evita ERR_PNPM_IGNORED_BUILDS)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile

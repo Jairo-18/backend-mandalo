@@ -4,8 +4,8 @@ FROM node:22-alpine AS production
 # Set working directory
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm (misma versión que generó el lockfile)
+RUN npm install -g pnpm@11.5.0
 
 # Copy package files
 COPY package.json pnpm-lock.yaml ./

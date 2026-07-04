@@ -24,6 +24,10 @@ export class UserUC {
     return this._userService.register(dto, RoleTypeCode.DELIVERY);
   }
 
+  verifyEmail(token: string, userId: string) {
+    return this._userService.verifyEmail(token, userId);
+  }
+
   findOne(id: string) {
     return this._userService.findOne(id);
   }

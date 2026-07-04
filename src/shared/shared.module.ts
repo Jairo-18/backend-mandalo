@@ -3,6 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
+import { MailerModule } from '@nestjs-modules/mailer';
+import { MailsService } from './services/mails.service';
+import { MailTemplateService } from './services/mail-template.service';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from './entities/user.entity';
 import { AccessSessions } from './entities/accessSessions.entity';
@@ -86,9 +89,29 @@ export class SharedModule {
             },
           }),
         }),
+
+        MailerModule.forRootAsync({
+          inject: [ConfigService],
+          useFactory: (configService: ConfigService) => ({
+            transport: {
+              host: configService.get<string>('MAIL_HOST'),
+              port: parseInt(configService.get('MAIL_PORT'), 10) || 587,
+              secure: configService.get('MAIL_SECURE') === 'true',
+              auth: {
+                user: configService.get<string>('MAIL_USER'),
+                pass: configService.get<string>('MAIL_PASSWORD'),
+              },
+            },
+            defaults: {
+              from: configService.get<string>('MAIL_SENDER'),
+            },
+          }),
+        }),
       ],
       providers: [
         RolesGuard,
+        MailsService,
+        MailTemplateService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -101,6 +124,8 @@ export class SharedModule {
         JwtModule,
         TypeOrmModule,
         RolesGuard,
+        MailsService,
+        MailTemplateService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,

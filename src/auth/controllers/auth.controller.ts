@@ -1,4 +1,5 @@
 import {
+  GoogleSignInDto,
   LoginDto,
   RefreshTokenBodyDto,
   SignOutBodyDto,
@@ -29,6 +30,22 @@ export class AuthController {
   @SignInDocs()
   async signIn(@Body() body: LoginDto): Promise<SignInResponseDto> {
     const data = await this._authUC.login(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Bienvenid@',
+      data: {
+        tokens: data.tokens,
+        user: data.user,
+        accessSessionId: data.session?.accessSessionId,
+      },
+    };
+  }
+
+  @Post('/google')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async googleSignIn(@Body() body: GoogleSignInDto): Promise<SignInResponseDto> {
+    const data = await this._authUC.googleSignIn(body);
     return {
       statusCode: HttpStatus.OK,
       message: 'Bienvenid@',

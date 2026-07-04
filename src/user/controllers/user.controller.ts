@@ -8,10 +8,13 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
+import { MailTemplateService } from '../../shared/services/mail-template.service';
 import { Throttle } from '@nestjs/throttler';
 import { UserUC } from '../useCases/user.uc';
 import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
@@ -36,7 +39,47 @@ import {
 @Controller('user')
 @ApiTags('Usuarios')
 export class UserController {
-  constructor(private readonly _userUC: UserUC) {}
+  constructor(
+    private readonly _userUC: UserUC,
+    private readonly _mailTemplateService: MailTemplateService,
+  ) {}
+
+  /**
+   * Enlace que llega al correo de verificación. Se abre en el navegador del
+   * teléfono, por eso responde una página HTML y no JSON.
+   */
+  @Get('verify-email')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyEmail(
+    @Query('token') token: string,
+    @Query('userId') userId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    let success = true;
+    let message =
+      'Tu correo fue verificado. Ya puedes iniciar sesión en la app de Mándalo.';
+
+    if (!token || !userId) {
+      success = false;
+      message = 'El enlace de verificación está incompleto o no es válido.';
+    } else {
+      try {
+        await this._userUC.verifyEmail(token, userId);
+      } catch (error) {
+        success = false;
+        message =
+          error?.response?.message ||
+          error?.message ||
+          'No se pudo verificar tu correo. Intenta registrarte de nuevo.';
+      }
+    }
+
+    res
+      .status(success ? HttpStatus.OK : HttpStatus.BAD_REQUEST)
+      .type('html')
+      .send(this._mailTemplateService.verifyEmailResultPage(success, message));
+  }
 
   @Post('register/client')
   @SkipApiKey()
@@ -48,7 +91,8 @@ export class UserController {
     const user = await this._userUC.registerClient(body);
     return {
       statusCode: HttpStatus.CREATED,
-      message: 'Cliente registrado exitosamente',
+      message:
+        '¡Registro exitoso! Te enviamos un correo para verificar tu cuenta.',
       data: { rowId: user.id },
     };
   }
@@ -63,7 +107,8 @@ export class UserController {
     const user = await this._userUC.registerDelivery(body);
     return {
       statusCode: HttpStatus.CREATED,
-      message: 'Repartidor registrado exitosamente',
+      message:
+        '¡Registro exitoso! Te enviamos un correo para verificar tu cuenta.',
       data: { rowId: user.id },
     };
   }

@@ -1,7 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import { BaseResponseDto } from '../../shared/dtos/response.dto';
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({ type: String, example: 'admin@mandalo.com', required: true })
@@ -13,6 +13,26 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty({ message: 'La contraseña es requerida' })
   password: string;
+}
+
+export class GoogleSignInDto {
+  @ApiProperty({
+    type: String,
+    description: 'idToken emitido por Google Sign-In en la app',
+    required: true,
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'El idToken de Google es requerido' })
+  idToken: string;
+
+  @ApiPropertyOptional({
+    enum: ['client', 'delivery'],
+    description:
+      'Rol con el que se crea la cuenta si el usuario no existe (default: client)',
+  })
+  @IsOptional()
+  @IsIn(['client', 'delivery'])
+  role?: 'client' | 'delivery';
 }
 
 export class RefreshTokenBodyDto {

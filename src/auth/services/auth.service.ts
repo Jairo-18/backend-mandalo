@@ -1,4 +1,4 @@
-import { RefreshTokenBodyDto } from '../dtos/auth.dto';
+import { GoogleSignInDto, RefreshTokenBodyDto } from '../dtos/auth.dto';
 import {
   TokenPayloadModel,
   UserAuthModel,
@@ -12,14 +12,19 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
+import { OAuth2Client } from 'google-auth-library';
 import { AccessSessionsService } from './accessSessions.service';
 import { v4 as uuidv4 } from 'uuid';
 import { UNAUTHORIZED_MESSAGE } from '../../shared/constants/messages.constant';
 import { INVALID_ACCESS_DATA_MESSAGE } from '../constants/messages.constants';
 import { NOT_FOUND_RESPONSE } from '../../shared/constants/response.constant';
+import { User } from '../../shared/entities/user.entity';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly _googleClient = new OAuth2Client();
+
   constructor(
     private readonly _userService: UserService,
     private readonly _jwtService: JwtService,
@@ -44,6 +49,81 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_ACCESS_DATA_MESSAGE);
     }
 
+    this.assertNotBanned(user);
+
+    if (!user.isEmailVerified) {
+      const tokenExpired =
+        !user.emailVerificationTokenExpiry ||
+        user.emailVerificationTokenExpiry < new Date();
+      throw new UnauthorizedException(
+        tokenExpired
+          ? 'Tu enlace de verificación expiró. Vuelve a registrarte.'
+          : 'Debes verificar tu correo electrónico antes de iniciar sesión.',
+      );
+    }
+
+    return await this.buildSignInResponse(user);
+  }
+
+  /**
+   * Autenticación con Google. La app manda el idToken que le entrega el
+   * Google Sign-In nativo; acá se verifica contra los client ids configurados
+   * y se busca/crea/vincula la cuenta (googleId).
+   */
+  async googleSignIn(body: GoogleSignInDto) {
+    const audience = [
+      this._configService.get<string>('google.webClientId'),
+      this._configService.get<string>('google.androidClientId'),
+    ].filter(Boolean);
+
+    if (!audience.length) {
+      throw new UnauthorizedException(
+        'La autenticación con Google no está configurada en el servidor',
+      );
+    }
+
+    let payload;
+    try {
+      const ticket = await this._googleClient.verifyIdToken({
+        idToken: body.idToken,
+        audience,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('No se pudo autenticar con Google');
+    }
+
+    if (!payload?.sub || !payload.email) {
+      throw new UnauthorizedException('No se pudo autenticar con Google');
+    }
+
+    const roleCode =
+      body.role === 'delivery' ? RoleTypeCode.DELIVERY : RoleTypeCode.CLIENT;
+
+    const { user, isNewUser } = await this._userService.findOrCreateGoogleUser(
+      {
+        googleId: payload.sub,
+        email: payload.email,
+        fullName: payload.name || payload.email.split('@')[0],
+        avatarUrl: payload.picture,
+      },
+      roleCode,
+    );
+
+    this.assertNotBanned(user);
+
+    return await this.buildSignInResponse(user, isNewUser);
+  }
+
+  private assertNotBanned(user: User): void {
+    if (user.isBanned) {
+      throw new UnauthorizedException(
+        'Tu cuenta ha sido suspendida. Contacta al administrador.',
+      );
+    }
+  }
+
+  private async buildSignInResponse(user: User, isNewUser?: boolean) {
     const payload = { email: user.email, sub: user.id, id: user.id };
     const tokens = this.generateTokens(payload);
 
@@ -55,7 +135,12 @@ export class AuthService {
 
     return {
       tokens,
-      user: { id: user.id, fullName: user.fullName, roleTypeId: user.roleTypeId },
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        roleTypeId: user.roleTypeId,
+        ...(isNewUser !== undefined && { isNewUser }),
+      },
       session: { accessSessionId },
     };
   }

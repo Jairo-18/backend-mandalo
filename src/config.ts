@@ -44,5 +44,20 @@ export const config = async () => {
       password: process.env.DB_PASSWORD || 'postgres',
       ssl: process.env.DB_SSL === 'true',
     },
+    mail: {
+      host: process.env.MAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.MAIL_PORT as string, 10) || 587,
+      user: process.env.MAIL_USER || '',
+      password: process.env.MAIL_PASSWORD || '',
+      sender: process.env.MAIL_SENDER || 'noreply@mandalo.com',
+      secure: process.env.MAIL_SECURE === 'true',
+    },
+    google: {
+      // Client ID "Web application" de Google Cloud Console. Es el audience
+      // contra el que se verifica el idToken que manda la app.
+      webClientId: process.env.GOOGLE_WEB_CLIENT_ID || '',
+      // Client ID "Android" (opcional, por si el idToken llega con ese audience).
+      androidClientId: process.env.GOOGLE_ANDROID_CLIENT_ID || '',
+    },
   };
 };

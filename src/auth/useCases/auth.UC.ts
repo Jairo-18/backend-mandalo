@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '../services/auth.service';
 import {
+  GoogleSignInDto,
   LoginDto,
   RefreshTokenBodyDto,
   SignOutBodyDto,
@@ -12,6 +13,10 @@ export class AuthUC {
 
   async login(body: LoginDto) {
     return await this._authService.signIn(body);
+  }
+
+  async googleSignIn(body: GoogleSignInDto) {
+    return await this._authService.googleSignIn(body);
   }
 
   async refreshToken(body: RefreshTokenBodyDto) {

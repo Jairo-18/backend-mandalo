@@ -11,6 +11,8 @@ import { ApiKeyGuard } from './shared/guards/api-key.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { CategoryTypeModule } from './categoryType/categoryType.module';
+import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -35,6 +37,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     UserModule,
     CatalogModule,
+    CategoryTypeModule,
+    TagModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

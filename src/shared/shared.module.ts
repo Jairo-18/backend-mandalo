@@ -14,6 +14,11 @@ import { RoleType } from './entities/roleType.entity';
 import { Department } from './entities/department.entity';
 import { Municipality } from './entities/municipality.entity';
 import { IdentificationType } from './entities/identificationType.entity';
+import { CategoryType } from './entities/categoryType.entity';
+import { StateType } from './entities/stateType.entity';
+import { PaidType } from './entities/paidType.entity';
+import { Tag } from './entities/tag.entity';
+import { Product } from './entities/product.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
@@ -21,6 +26,11 @@ import { RoleTypeRepository } from './repositories/roleType.repository';
 import { DepartmentRepository } from './repositories/department.repository';
 import { MunicipalityRepository } from './repositories/municipality.repository';
 import { IdentificationTypeRepository } from './repositories/identificationType.repository';
+import { CategoryTypeRepository } from './repositories/categoryType.repository';
+import { StateTypeRepository } from './repositories/stateType.repository';
+import { PaidTypeRepository } from './repositories/paidType.repository';
+import { TagRepository } from './repositories/tag.repository';
+import { ProductRepository } from './repositories/product.repository';
 
 @Module({})
 export class SharedModule {
@@ -75,6 +85,11 @@ export class SharedModule {
           Department,
           Municipality,
           IdentificationType,
+          CategoryType,
+          StateType,
+          PaidType,
+          Tag,
+          Product,
         ]),
 
         PassportModule,
@@ -119,6 +134,11 @@ export class SharedModule {
         DepartmentRepository,
         MunicipalityRepository,
         IdentificationTypeRepository,
+        CategoryTypeRepository,
+        StateTypeRepository,
+        PaidTypeRepository,
+        TagRepository,
+        ProductRepository,
       ],
       exports: [
         JwtModule,
@@ -133,6 +153,11 @@ export class SharedModule {
         DepartmentRepository,
         MunicipalityRepository,
         IdentificationTypeRepository,
+        CategoryTypeRepository,
+        StateTypeRepository,
+        PaidTypeRepository,
+        TagRepository,
+        ProductRepository,
       ],
     };
   }

@@ -5,10 +5,13 @@ import {
   IsEmail,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -57,6 +60,22 @@ export class CreateUserDto {
   @IsString()
   @MaxLength(255)
   address?: string;
+
+  @ApiPropertyOptional({ example: 1.0287, description: 'Latitud de la dirección' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: -76.6272, description: 'Longitud de la dirección' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @ApiPropertyOptional({ description: 'UUID del tipo de rol' })
   @IsOptional()
@@ -144,6 +163,22 @@ export class RegisterUserDto {
   @IsString()
   @MaxLength(255)
   address?: string;
+
+  @ApiPropertyOptional({ example: 1.0287, description: 'Latitud (ubicación del dispositivo)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: -76.6272, description: 'Longitud (ubicación del dispositivo)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @ApiPropertyOptional({ example: '1090123456' })
   @IsOptional()

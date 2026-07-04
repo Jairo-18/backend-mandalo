@@ -6,6 +6,6 @@ export class AppService {
   constructor(private readonly configService: ConfigService) {}
 
   getHello(): string {
-    return 'Mandalo API - OK';
+    return 'Mándalo API - OK';
   }
 }

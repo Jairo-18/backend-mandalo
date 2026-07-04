@@ -38,8 +38,8 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('MANDALO API')
-    .setDescription('API de Mandalo')
+    .setTitle('Mándalo API')
+    .setDescription('API de Mándalo')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

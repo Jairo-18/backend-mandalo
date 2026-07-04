@@ -48,6 +48,14 @@ export class User {
   @Column('varchar', { length: 255, nullable: true })
   address?: string;
 
+  // Coordenadas de la dirección (capturadas de la ubicación del dispositivo);
+  // el texto de `address` es para humanos, esto para distancias/rutas.
+  @Column('double precision', { nullable: true })
+  latitude?: number;
+
+  @Column('double precision', { nullable: true })
+  longitude?: number;
+
   @Column('boolean', { default: true })
   isActive: boolean;
 

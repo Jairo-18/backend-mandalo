@@ -115,6 +115,19 @@ export class AuthService {
     return await this.buildSignInResponse(user, isNewUser);
   }
 
+  /** Recuperación de contraseña (la lógica vive en UserService). */
+  async forgotPassword(email: string): Promise<void> {
+    await this._userService.forgotPassword(email);
+  }
+
+  async resetPassword(
+    email: string,
+    code: string,
+    newPassword: string,
+  ): Promise<void> {
+    await this._userService.resetPassword(email, code, newPassword);
+  }
+
   private assertNotBanned(user: User): void {
     if (user.isBanned) {
       throw new UnauthorizedException(

@@ -23,6 +23,7 @@ import { MailTemplateService } from '../../shared/services/mail-template.service
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
+const PASSWORD_RESET_CODE_MINUTES = 15;
 
 export interface GoogleUserProfile {
   googleId: string;
@@ -139,7 +140,20 @@ export class UserService {
       );
     }
 
-    await this.sendVerificationEmail(existing);
+    try {
+      await this.sendVerificationEmail(existing);
+    } catch (error) {
+      // Sin esto, una caída del SMTP convierte el reenvío en un 500 genérico.
+      console.error('Error resending verification email:', error);
+      throw new HttpException(
+        {
+          message:
+            'No pudimos enviar el correo de verificación. Inténtalo de nuevo en unos minutos.',
+          code: 'VERIFICATION_EMAIL_FAILED',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     throw new HttpException(
       {
         message:
@@ -199,6 +213,84 @@ export class UserService {
     await this._userRepository.update(
       { id: userId },
       {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationTokenExpiry: null,
+      },
+    );
+  }
+
+  /**
+   * Recuperación de contraseña, paso 1: genera un código de 6 dígitos que
+   * vence en 15 min y lo envía por correo. El usuario lo digita en la app
+   * (no hay enlaces ni deep links).
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this._userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
+    if (!user) {
+      throw new NotFoundException('No encontramos una cuenta con ese correo.');
+    }
+
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const expiry = new Date();
+    expiry.setMinutes(expiry.getMinutes() + PASSWORD_RESET_CODE_MINUTES);
+    await this._userRepository.update(user.id, {
+      resetToken: code,
+      resetTokenExpiry: expiry,
+    });
+
+    try {
+      await this._mailsService.sendEmail({
+        to: user.email,
+        subject: 'Código para restablecer tu contraseña',
+        body: this._mailTemplateService.resetPasswordTemplate(
+          code,
+          user.fullName,
+        ),
+      });
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      throw new HttpException(
+        {
+          message:
+            'No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.',
+          code: 'RESET_EMAIL_FAILED',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
+  /**
+   * Recuperación de contraseña, paso 2: valida el código y cambia la
+   * contraseña. Usar el código recibido por correo también prueba que el
+   * correo es del usuario, así que de paso la cuenta queda verificada.
+   */
+  async resetPassword(
+    email: string,
+    code: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this._userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user || !user.resetToken || user.resetToken !== code) {
+      throw new BadRequestException('El código no es válido.');
+    }
+    if (!user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      throw new BadRequestException('El código expiró. Solicita uno nuevo.');
+    }
+
+    const password = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this._userRepository.update(
+      { id: user.id },
+      {
+        password,
+        resetToken: null,
+        resetTokenExpiry: null,
         isEmailVerified: true,
         emailVerificationToken: null,
         emailVerificationTokenExpiry: null,

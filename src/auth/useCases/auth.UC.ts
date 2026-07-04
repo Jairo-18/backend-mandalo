@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '../services/auth.service';
 import {
+  ForgotPasswordDto,
   GoogleSignInDto,
   LoginDto,
   RefreshTokenBodyDto,
+  ResetPasswordDto,
   SignOutBodyDto,
 } from '../dtos/auth.dto';
 
@@ -25,5 +27,17 @@ export class AuthUC {
 
   async signOut(body: SignOutBodyDto) {
     return await this._authService.signOut(body);
+  }
+
+  async forgotPassword(body: ForgotPasswordDto) {
+    return await this._authService.forgotPassword(body.email);
+  }
+
+  async resetPassword(body: ResetPasswordDto) {
+    return await this._authService.resetPassword(
+      body.email,
+      body.code,
+      body.newPassword,
+    );
   }
 }

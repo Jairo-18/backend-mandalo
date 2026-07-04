@@ -1,7 +1,10 @@
 import {
+  ForgotPasswordDto,
   GoogleSignInDto,
   LoginDto,
+  MessageResponseDto,
   RefreshTokenBodyDto,
+  ResetPasswordDto,
   SignOutBodyDto,
   SignOutResponseDto,
   SignInResponseDto,
@@ -70,6 +73,33 @@ export class AuthController {
         tokens: data.tokens,
         user: data.user,
       },
+    };
+  }
+
+  @Post('/forgot-password')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async forgotPassword(
+    @Body() body: ForgotPasswordDto,
+  ): Promise<MessageResponseDto> {
+    await this._authUC.forgotPassword(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message:
+        'Te enviamos un código para restablecer tu contraseña. Revisa tu correo.',
+    };
+  }
+
+  @Post('/reset-password')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+  ): Promise<MessageResponseDto> {
+    await this._authUC.resetPassword(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Contraseña actualizada. Ya puedes iniciar sesión.',
     };
   }
 

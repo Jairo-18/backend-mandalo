@@ -1,7 +1,15 @@
 import { HttpStatus } from '@nestjs/common';
 import { BaseResponseDto } from '../../shared/dtos/response.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  MinLength,
+} from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({ type: String, example: 'admin@mandalo.com', required: true })
@@ -64,6 +72,43 @@ export class SignOutBodyDto {
   @IsString()
   @IsNotEmpty()
   accessSessionId: string;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty({ type: String, example: 'tu@correo.com', required: true })
+  @IsEmail({}, { message: 'El correo no es válido' })
+  @IsNotEmpty({ message: 'El email es requerido' })
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ type: String, example: 'tu@correo.com', required: true })
+  @IsEmail({}, { message: 'El correo no es válido' })
+  @IsNotEmpty({ message: 'El email es requerido' })
+  email: string;
+
+  @ApiProperty({
+    type: String,
+    example: '123456',
+    description: 'Código de 6 dígitos enviado por correo',
+    required: true,
+  })
+  @IsString()
+  @Length(6, 6, { message: 'El código debe tener 6 dígitos' })
+  code: string;
+
+  @ApiProperty({ type: String, example: 'NuevaClave123', required: true })
+  @IsString()
+  @MinLength(8, { message: 'La contraseña debe tener mínimo 8 caracteres' })
+  newPassword: string;
+}
+
+export class MessageResponseDto implements BaseResponseDto {
+  @ApiProperty({ type: Number, example: HttpStatus.OK })
+  statusCode: number;
+
+  @ApiProperty({ type: String })
+  message: string;
 }
 
 export class AuthTokenResponseDto {

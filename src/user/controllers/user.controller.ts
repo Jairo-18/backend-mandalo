@@ -9,9 +9,12 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
@@ -34,6 +37,7 @@ import {
   GetPaginatedUsersDocs,
   RegisterUserDocs,
   UpdateUserDocs,
+  UploadAvatarDocs,
 } from '../decorators/user.decorators';
 
 @Controller('user')
@@ -169,6 +173,23 @@ export class UserController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Usuario eliminado exitosamente',
+    };
+  }
+
+  /** Sube/reemplaza la foto de perfil (multipart/form-data, campo `file`). */
+  @Post(':id/avatar')
+  @UseGuards(AuthGuard())
+  @UploadAvatarDocs()
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._userUC.updateAvatar(id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de perfil actualizada',
+      data,
     };
   }
 }

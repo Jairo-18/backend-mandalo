@@ -22,6 +22,7 @@ export class CrudUserService {
       .leftJoinAndSelect('user.roleType', 'roleType')
       .leftJoinAndSelect('user.municipality', 'municipality')
       .leftJoinAndSelect('user.department', 'department')
+      .leftJoinAndSelect('user.identificationType', 'identificationType')
       .skip(skip)
       .take(perPage)
       .orderBy('user.createdAt', params.order ?? 'ASC');
@@ -35,6 +36,40 @@ export class CrudUserService {
     if (params.roleTypeId) {
       query.andWhere('user.roleTypeId = :roleTypeId', {
         roleTypeId: params.roleTypeId,
+      });
+    }
+
+    if (params.roleTypeCode) {
+      query.andWhere('roleType.code = :roleTypeCode', {
+        roleTypeCode: params.roleTypeCode,
+      });
+    }
+
+    if (params.roleTypeCodes?.length) {
+      query.andWhere('roleType.code IN (:...roleTypeCodes)', {
+        roleTypeCodes: params.roleTypeCodes,
+      });
+    }
+
+    // Filtros parciales por campo (los usa la búsqueda por campo del admin).
+    if (params.fullName) {
+      query.andWhere('user.fullName ILIKE :fullName', {
+        fullName: `%${params.fullName.trim()}%`,
+      });
+    }
+    if (params.phone) {
+      query.andWhere('user.phone ILIKE :phone', {
+        phone: `%${params.phone.trim()}%`,
+      });
+    }
+    if (params.username) {
+      query.andWhere('user.username ILIKE :username', {
+        username: `%${params.username.trim()}%`,
+      });
+    }
+    if (params.identificationNumber) {
+      query.andWhere('user.identificationNumber ILIKE :identificationNumber', {
+        identificationNumber: `%${params.identificationNumber.trim()}%`,
       });
     }
 
@@ -110,6 +145,13 @@ export class CrudUserService {
             id: user.department.id,
             code: user.department.code,
             name: user.department.name,
+          }
+        : null,
+      identificationType: user.identificationType
+        ? {
+            id: user.identificationType.id,
+            code: user.identificationType.code,
+            name: user.identificationType.name,
           }
         : null,
       createdAt: user.createdAt ?? null,

@@ -152,10 +152,23 @@ export class AuthService {
         id: user.id,
         fullName: user.fullName,
         roleTypeId: user.roleTypeId,
+        role: this.toRolePayload(user),
+        avatarUrl: user.avatarUrl ?? null,
         ...(isNewUser !== undefined && { isNewUser }),
       },
       session: { accessSessionId },
     };
+  }
+
+  /** Rol plano para el front (el `code` decide la navegación, ej. ADMIN). */
+  private toRolePayload(user: User) {
+    return user.roleType
+      ? {
+          id: user.roleType.id,
+          code: user.roleType.code,
+          name: user.roleType.name,
+        }
+      : null;
   }
 
   async validateSession({ userId, token }: { userId: string; token: string }) {
@@ -212,6 +225,8 @@ export class AuthService {
       throw new UnauthorizedException(UNAUTHORIZED_MESSAGE);
     }
 
+    this.assertNotBanned(user);
+
     const tokens = this.generateTokens({
       email: user.email,
       id: user.id,
@@ -220,7 +235,13 @@ export class AuthService {
 
     return {
       tokens,
-      user: { id: user.id, fullName: user.fullName, roleTypeId: user.roleTypeId },
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        roleTypeId: user.roleTypeId,
+        role: this.toRolePayload(user),
+        avatarUrl: user.avatarUrl ?? null,
+      },
     };
   }
 

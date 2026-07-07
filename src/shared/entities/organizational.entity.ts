@@ -48,6 +48,10 @@ export class Organizational {
   @Column('varchar', { length: 500, nullable: true })
   logoUrl?: string;
 
+  // Teléfono de contacto del negocio (el que ve el cliente para llamar/pedir)
+  @Column('varchar', { length: 30, nullable: true })
+  phone?: string;
+
   @Column('varchar', { length: 255, nullable: true })
   address?: string;
 

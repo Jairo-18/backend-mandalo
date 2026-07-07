@@ -13,57 +13,50 @@ import {
   UpdateRecordResponseDto,
 } from '../../shared/dtos/response.dto';
 
-export function CreateUserDocs() {
+export function CreateOrganizationalDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Crear usuario (admin)' }),
+    ApiOperation({ summary: 'Crear negocio' }),
     ApiCreatedResponse({ type: CreatedRecordResponseDto }),
   );
 }
 
-export function RegisterUserDocs(kind = 'usuario') {
-  return applyDecorators(
-    ApiOperation({ summary: `Auto-registro de ${kind} (público)` }),
-    ApiCreatedResponse({ type: CreatedRecordResponseDto }),
-  );
-}
-
-export function GetPaginatedUsersDocs() {
+export function GetPaginatedOrganizationalsDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Listado paginado de usuarios' }),
+    ApiOperation({ summary: 'Listado paginado de negocios' }),
     ApiOkResponse(),
   );
 }
 
-export function FindOneUserDocs() {
+export function FindOneOrganizationalDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Obtener usuario por ID' }),
+    ApiOperation({ summary: 'Obtener negocio por ID' }),
     ApiOkResponse(),
   );
 }
 
-export function UpdateUserDocs() {
+export function UpdateOrganizationalDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Editar usuario' }),
+    ApiOperation({ summary: 'Editar negocio' }),
     ApiOkResponse({ type: UpdateRecordResponseDto }),
   );
 }
 
-export function DeleteUserDocs() {
+export function DeleteOrganizationalDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Eliminar usuario' }),
+    ApiOperation({ summary: 'Eliminar negocio' }),
     ApiOkResponse({ type: DeleteRecordResponseDto }),
   );
 }
 
-export function UploadAvatarDocs() {
+export function UploadLogoDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Subir/reemplazar la foto de perfil' }),
+    ApiOperation({ summary: 'Subir/reemplazar el logo del negocio' }),
     ApiConsumes('multipart/form-data'),
     ApiBody({
       schema: {

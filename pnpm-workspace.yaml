@@ -1,3 +1,5 @@
 allowBuilds:
   '@nestjs/core': false
   '@scarf/scarf': false
+  # sharp necesita su postinstall (descarga los binarios nativos por plataforma)
+  sharp: true

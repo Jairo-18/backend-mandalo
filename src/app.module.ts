@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PassportModule } from '@nestjs/passport';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -13,6 +15,7 @@ import { UserModule } from './user/user.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CategoryTypeModule } from './categoryType/categoryType.module';
 import { TagModule } from './tag/tag.module';
+import { OrganizationalModule } from './organizational/organizational.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -32,6 +35,22 @@ import { ScheduleModule } from '@nestjs/schedule';
         limit: 500,
       },
     ]),
+    // Sirve las imágenes subidas (avatares, logos, productos) en /uploads.
+    // Mismo directorio que usa LocalStorageService; en el VPS es un bind
+    // mount de Dokploy para que sobreviva a los redeploys.
+    ServeStaticModule.forRoot({
+      rootPath:
+        process.platform === 'win32'
+          ? join(process.cwd(), 'uploads')
+          : '/app/uploads',
+      serveRoot: '/uploads',
+      serveStaticOptions: {
+        setHeaders: (res) => {
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+        },
+      },
+    }),
     SharedModule.forRoot(),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     AuthModule,
@@ -39,6 +58,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     CatalogModule,
     CategoryTypeModule,
     TagModule,
+    OrganizationalModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

@@ -20,6 +20,7 @@ import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto'
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { MailsService } from '../../shared/services/mails.service';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
+import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
@@ -43,12 +44,13 @@ export class UserService {
     private readonly _configService: ConfigService,
     private readonly _mailsService: MailsService,
     private readonly _mailTemplateService: MailTemplateService,
+    private readonly _localStorageService: LocalStorageService,
   ) {}
 
   async findOne(id: string): Promise<User> {
     const user = await this._userRepository.findOne({
       where: { id },
-      relations: ['roleType', 'municipality', 'department'],
+      relations: ['roleType', 'municipality', 'department', 'identificationType'],
     });
     if (!user) {
       throw new HttpException(NOT_FOUND_MESSAGE, HttpStatus.NOT_FOUND);
@@ -57,16 +59,44 @@ export class UserService {
   }
 
   async findByParams(params: Record<string, any>): Promise<User> {
-    return await this._userRepository.findOne({ where: params });
+    return await this._userRepository.findOne({
+      where: params,
+      relations: ['roleType'],
+    });
   }
 
   async create(dto: CreateUserDto): Promise<User> {
-    await this.assertEmailAvailable(dto.email);
-    await this.assertUsernameAvailable(dto.username);
-    await this.assertRelationsExist(dto);
+    const { roleTypeCode, ...data } = dto;
+    await this.assertEmailAvailable(data.email);
+    await this.assertUsernameAvailable(data.username);
+    await this.assertPhoneAvailable(data.phone);
+    await this.assertIdentificationAvailable(data.identificationNumber);
+    await this.assertRelationsExist(data);
+
+    // El rol puede venir por uuid (roleTypeId) o por code (roleTypeCode);
+    // el code manda si vienen los dos.
+    let roleTypeId = data.roleTypeId;
+    if (roleTypeCode) {
+      const roleType = await this._roleTypeRepository.findOne({
+        where: { code: roleTypeCode },
+      });
+      if (!roleType) {
+        throw new BadRequestException(
+          `El rol "${roleTypeCode}" no está configurado en la base de datos`,
+        );
+      }
+      roleTypeId = roleType.id;
+    }
 
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    const user = this._userRepository.create({ ...dto, password });
+    // Cuenta creada por un administrador: no se envía correo de verificación,
+    // así que nace verificada (si no, nunca podría iniciar sesión).
+    const user = this._userRepository.create({
+      ...data,
+      roleTypeId,
+      password,
+      isEmailVerified: true,
+    });
     return await this._userRepository.save(user);
   }
 
@@ -80,6 +110,8 @@ export class UserService {
     const email = dto.email.toLowerCase();
     await this.handleExistingRegistration(email);
     await this.assertUsernameAvailable(dto.username);
+    await this.assertPhoneAvailable(dto.phone);
+    await this.assertIdentificationAvailable(dto.identificationNumber);
 
     const roleType = await this._roleTypeRepository.findOne({
       where: { code: roleCode },
@@ -391,9 +423,35 @@ export class UserService {
     if (dto.username && dto.username !== user.username) {
       await this.assertUsernameAvailable(dto.username);
     }
+    if (dto.phone && dto.phone !== user.phone) {
+      await this.assertPhoneAvailable(dto.phone);
+    }
+    if (
+      dto.identificationNumber &&
+      dto.identificationNumber !== user.identificationNumber
+    ) {
+      await this.assertIdentificationAvailable(dto.identificationNumber);
+    }
     await this.assertRelationsExist(dto);
 
-    const { password, ...rest } = dto;
+    const { password, roleTypeCode, ...rest } = dto;
+
+    if (roleTypeCode) {
+      const roleType = await this._roleTypeRepository.findOne({
+        where: { code: roleTypeCode },
+      });
+      if (!roleType) {
+        throw new BadRequestException(
+          `El rol "${roleTypeCode}" no está configurado en la base de datos`,
+        );
+      }
+      rest.roleTypeId = roleType.id;
+    }
+    if (rest.roleTypeId && rest.roleTypeId !== user.roleTypeId) {
+      // findOne carga la relación; se limpia para que no pise el id nuevo.
+      user.roleType = undefined;
+    }
+
     Object.assign(user, rest);
     if (password) {
       user.password = await bcrypt.hash(password, SALT_ROUNDS);
@@ -405,6 +463,33 @@ export class UserService {
   async delete(id: string): Promise<void> {
     const user = await this.findOne(id);
     await this._userRepository.delete(user.id);
+  }
+
+  /**
+   * Sube/reemplaza la foto de perfil: guarda la nueva imagen, actualiza
+   * `avatarUrl` y borra el archivo anterior del disco (solo si era una
+   * imagen subida a este servidor; los avatares de Google no se tocan).
+   */
+  async updateAvatar(
+    id: string,
+    file: Express.Multer.File,
+  ): Promise<{ avatarUrl: string }> {
+    const user = await this.findOne(id);
+
+    const { imageUrl } = await this._localStorageService.saveImage(
+      file,
+      'users',
+    );
+
+    const oldPublicId = this._localStorageService.publicIdFromUrl(
+      user.avatarUrl,
+    );
+    await this._userRepository.update(id, { avatarUrl: imageUrl });
+    if (oldPublicId) {
+      await this._localStorageService.deleteImage(oldPublicId);
+    }
+
+    return { avatarUrl: imageUrl };
   }
 
   // ---------- helpers ----------
@@ -422,6 +507,28 @@ export class UserService {
     const exists = await this._userRepository.findOne({ where: { username } });
     if (exists) {
       throw new ConflictException('El nombre de usuario ya está en uso');
+    }
+  }
+
+  private async assertPhoneAvailable(phone?: string | null): Promise<void> {
+    if (!phone) return;
+    const exists = await this._userRepository.findOne({ where: { phone } });
+    if (exists) {
+      throw new ConflictException('El teléfono ya está registrado');
+    }
+  }
+
+  private async assertIdentificationAvailable(
+    identificationNumber?: string | null,
+  ): Promise<void> {
+    if (!identificationNumber) return;
+    const exists = await this._userRepository.findOne({
+      where: { identificationNumber },
+    });
+    if (exists) {
+      throw new ConflictException(
+        'El número de identificación ya está registrado',
+      );
     }
   }
 

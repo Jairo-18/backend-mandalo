@@ -8,6 +8,7 @@ import { AuthUC } from './useCases/auth.UC';
 import { AccessSessionsService } from './services/accessSessions.service';
 import { UserService } from '../user/services/user.service';
 import { JwtStrategy } from '../shared/strategies/jwt.strategy';
+import { LocalStorageModule } from '../localStorage/localStorage.module';
 
 @Module({
   imports: [
@@ -19,6 +20,9 @@ import { JwtStrategy } from '../shared/strategies/jwt.strategy';
       }),
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    // AuthModule declara UserService como provider propio (no importa
+    // UserModule), así que necesita el módulo de storage que este inyecta.
+    LocalStorageModule,
   ],
   controllers: [AuthController],
   providers: [

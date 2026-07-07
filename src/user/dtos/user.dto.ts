@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -14,6 +15,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
 /**
  * Creación de usuario por un administrador. Acepta todos los datos de perfil
@@ -81,6 +83,14 @@ export class CreateUserDto {
   @IsOptional()
   @IsUUID()
   roleTypeId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Code del tipo de rol (alternativa a roleTypeId; manda si vienen los dos)',
+    enum: RoleTypeCode,
+  })
+  @IsOptional()
+  @IsEnum(RoleTypeCode)
+  roleTypeCode?: RoleTypeCode;
 
   @ApiPropertyOptional({ example: '1090123456' })
   @IsOptional()

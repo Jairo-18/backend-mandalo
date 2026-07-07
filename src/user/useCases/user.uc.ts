@@ -43,4 +43,8 @@ export class UserUC {
   delete(id: string) {
     return this._userService.delete(id);
   }
+
+  updateAvatar(id: string, file: Express.Multer.File) {
+    return this._userService.updateAvatar(id, file);
+  }
 }

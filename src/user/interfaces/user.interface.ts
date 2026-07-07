@@ -21,5 +21,6 @@ export interface UserPaginatedListItem {
   roleType: CatalogRef | null;
   municipality: CatalogRef | null;
   department: CatalogRef | null;
+  identificationType: CatalogRef | null;
   createdAt: Date | null;
 }

@@ -4,9 +4,13 @@ import { UserController } from './controllers/user.controller';
 import { UserService } from './services/user.service';
 import { CrudUserService } from './services/crudUser.service';
 import { UserUC } from './useCases/user.uc';
+import { LocalStorageModule } from '../localStorage/localStorage.module';
 
 @Module({
-  imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+  imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    LocalStorageModule,
+  ],
   controllers: [UserController],
   providers: [UserService, CrudUserService, UserUC],
   exports: [UserService],

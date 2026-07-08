@@ -154,6 +154,10 @@ export class AuthService {
         roleTypeId: user.roleTypeId,
         role: this.toRolePayload(user),
         avatarUrl: user.avatarUrl ?? null,
+        // El front decide con esto si un DELI entra al panel o a la pantalla
+        // "Cuenta en proceso de habilitación" (+ la nota del admin).
+        isActive: user.isActive,
+        observations: user.observations ?? null,
         ...(isNewUser !== undefined && { isNewUser }),
       },
       session: { accessSessionId },
@@ -241,6 +245,10 @@ export class AuthService {
         roleTypeId: user.roleTypeId,
         role: this.toRolePayload(user),
         avatarUrl: user.avatarUrl ?? null,
+        // Igual que el sign-in: el auto-login refresca el estado de
+        // habilitación del repartidor (y la nota del admin) al abrir la app.
+        isActive: user.isActive,
+        observations: user.observations ?? null,
       },
     };
   }

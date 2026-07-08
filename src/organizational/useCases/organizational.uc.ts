@@ -20,6 +20,18 @@ export class OrganizationalUC {
     return this._organizationalService.findOne(id);
   }
 
+  findMine(userId: string) {
+    return this._organizationalService.findMine(userId);
+  }
+
+  updateMine(userId: string, dto: UpdateOrganizationalDto) {
+    return this._organizationalService.updateMine(userId, dto);
+  }
+
+  updateMyLogo(userId: string, file: Express.Multer.File) {
+    return this._organizationalService.updateMyLogo(userId, file);
+  }
+
   paginatedList(params: PaginatedOrganizationalsParamsDto) {
     return this._organizationalService.paginatedList(params);
   }

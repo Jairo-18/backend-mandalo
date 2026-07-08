@@ -217,4 +217,13 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @IsBoolean()
   isEmailVerified?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Nota del admin PARA el usuario (p. ej. por qué su cuenta de repartidor no se activa). `null` la limpia.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  observations?: string | null;
 }

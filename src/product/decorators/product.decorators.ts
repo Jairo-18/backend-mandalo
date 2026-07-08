@@ -13,69 +13,52 @@ import {
   UpdateRecordResponseDto,
 } from '../../shared/dtos/response.dto';
 
-export function CreateOrganizationalDocs() {
+export function CreateProductDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Crear negocio' }),
+    ApiOperation({ summary: 'Crear producto (del negocio del usuario)' }),
     ApiCreatedResponse({ type: CreatedRecordResponseDto }),
   );
 }
 
-export function GetPaginatedOrganizationalsDocs() {
-  return applyDecorators(
-    ApiBearerAuth(),
-    ApiOperation({ summary: 'Listado paginado de negocios' }),
-    ApiOkResponse(),
-  );
-}
-
-export function FindMineOrganizationalDocs() {
-  return applyDecorators(
-    ApiBearerAuth(),
-    ApiOperation({ summary: 'Negocio del usuario autenticado (rol NEGO)' }),
-    ApiOkResponse(),
-  );
-}
-
-export function UpdateMineOrganizationalDocs() {
+export function GetPaginatedProductsDocs() {
   return applyDecorators(
     ApiBearerAuth(),
     ApiOperation({
-      summary:
-        'Editar el negocio propio (rol NEGO; ignora dueño/cuenta/estado)',
+      summary: 'Listado paginado de productos del negocio del usuario',
     }),
-    ApiOkResponse({ type: UpdateRecordResponseDto }),
-  );
-}
-
-export function FindOneOrganizationalDocs() {
-  return applyDecorators(
-    ApiBearerAuth(),
-    ApiOperation({ summary: 'Obtener negocio por ID' }),
     ApiOkResponse(),
   );
 }
 
-export function UpdateOrganizationalDocs() {
+export function FindOneProductDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Editar negocio' }),
+    ApiOperation({ summary: 'Obtener producto por ID (del negocio propio)' }),
+    ApiOkResponse(),
+  );
+}
+
+export function UpdateProductDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({ summary: 'Editar producto (del negocio propio)' }),
     ApiOkResponse({ type: UpdateRecordResponseDto }),
   );
 }
 
-export function DeleteOrganizationalDocs() {
+export function DeleteProductDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Eliminar negocio' }),
+    ApiOperation({ summary: 'Eliminar producto (del negocio propio)' }),
     ApiOkResponse({ type: DeleteRecordResponseDto }),
   );
 }
 
-export function UploadLogoDocs() {
+export function AddProductImageDocs() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiOperation({ summary: 'Subir/reemplazar el logo del negocio' }),
+    ApiOperation({ summary: 'Agregar una foto al producto' }),
     ApiConsumes('multipart/form-data'),
     ApiBody({
       schema: {
@@ -86,6 +69,14 @@ export function UploadLogoDocs() {
         required: ['file'],
       },
     }),
+    ApiOkResponse(),
+  );
+}
+
+export function RemoveProductImageDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({ summary: 'Quitar una foto del producto' }),
     ApiOkResponse(),
   );
 }

@@ -16,6 +16,8 @@ import { CatalogModule } from './catalog/catalog.module';
 import { CategoryTypeModule } from './categoryType/categoryType.module';
 import { TagModule } from './tag/tag.module';
 import { OrganizationalModule } from './organizational/organizational.module';
+import { ProductModule } from './product/product.module';
+import { UserAddressModule } from './userAddress/userAddress.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -59,6 +61,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     CategoryTypeModule,
     TagModule,
     OrganizationalModule,
+    ProductModule,
+    UserAddressModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

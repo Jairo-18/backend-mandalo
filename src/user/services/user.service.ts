@@ -21,6 +21,7 @@ import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { MailsService } from '../../shared/services/mails.service';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
+import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
@@ -31,6 +32,13 @@ export interface GoogleUserProfile {
   email: string;
   fullName: string;
   avatarUrl?: string;
+}
+
+/** Fotos de verificación del registro de repartidor (multipart). */
+export interface RegisterDeliveryFiles {
+  avatar?: Express.Multer.File[];
+  idFront?: Express.Multer.File[];
+  idBack?: Express.Multer.File[];
 }
 
 @Injectable()
@@ -45,6 +53,7 @@ export class UserService {
     private readonly _mailsService: MailsService,
     private readonly _mailTemplateService: MailTemplateService,
     private readonly _localStorageService: LocalStorageService,
+    private readonly _userAddressRepository: UserAddressRepository,
   ) {}
 
   async findOne(id: string): Promise<User> {
@@ -106,8 +115,28 @@ export class UserService {
    * de verificación: se envía un correo con un enlace que vence en 30 min y
    * el login se bloquea hasta que se verifique (ver AuthService.signIn).
    */
-  async register(dto: RegisterUserDto, roleCode: RoleTypeCode): Promise<User> {
+  async register(
+    dto: RegisterUserDto,
+    roleCode: RoleTypeCode,
+    files?: RegisterDeliveryFiles,
+  ): Promise<User> {
     const email = dto.email.toLowerCase();
+    const isDelivery = roleCode === RoleTypeCode.DELIVERY;
+
+    // Los repartidores suben sí o sí su foto y el documento por ambos lados
+    // (un admin los revisa antes de activar la cuenta). Se valida ANTES de
+    // crear el usuario para no dejar cuentas a medias.
+    if (isDelivery) {
+      if (!files?.avatar?.[0]) {
+        throw new BadRequestException('La foto de tu rostro es obligatoria');
+      }
+      if (!files?.idFront?.[0] || !files?.idBack?.[0]) {
+        throw new BadRequestException(
+          'Las fotos de tu documento (por delante y por detrás) son obligatorias',
+        );
+      }
+    }
+
     await this.handleExistingRegistration(email);
     await this.assertUsernameAvailable(dto.username);
     await this.assertPhoneAvailable(dto.phone);
@@ -130,10 +159,46 @@ export class UserService {
       email,
       password,
       roleTypeId: roleType.id,
-      isActive: true,
+      // La cuenta DELI nace inactiva: la habilita un admin tras revisar los
+      // documentos (la pantalla "Cuenta en proceso de habilitación" del front).
+      isActive: !isDelivery,
       isEmailVerified: false,
     });
     const saved = await this._userRepository.save(user);
+
+    // Fotos de verificación del repartidor (después de crear: si el registro
+    // falla por duplicados no quedan archivos huérfanos en el disco).
+    if (isDelivery && files) {
+      const [avatar, idFront, idBack] = await Promise.all([
+        this._localStorageService.saveImage(files.avatar![0], 'users'),
+        this._localStorageService.saveImage(files.idFront![0], 'users'),
+        this._localStorageService.saveImage(files.idBack![0], 'users'),
+      ]);
+      await this._userRepository.update(saved.id, {
+        avatarUrl: avatar.imageUrl,
+        identificationFrontUrl: idFront.imageUrl,
+        identificationBackUrl: idBack.imageUrl,
+      });
+      saved.avatarUrl = avatar.imageUrl;
+      saved.identificationFrontUrl = idFront.imageUrl;
+      saved.identificationBackUrl = idBack.imageUrl;
+    }
+
+    // Un cliente nuevo arranca con su dirección del registro como principal
+    // en userAddress ("Casa", con coordenadas si usó el GPS). Espejo del seed
+    // de la migración AddUserAddress; solo aplica al rol USER.
+    if (roleCode === RoleTypeCode.CLIENT && dto.address?.trim()) {
+      await this._userAddressRepository.save(
+        this._userAddressRepository.create({
+          userId: saved.id,
+          label: 'Casa',
+          address: dto.address.trim(),
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          isDefault: true,
+        }),
+      );
+    }
 
     try {
       await this.sendVerificationEmail(saved);
@@ -402,7 +467,9 @@ export class UserService {
       avatarUrl: profile.avatarUrl,
       password: randomPassword,
       roleTypeId: roleType.id,
-      isActive: true,
+      // Un repartidor creado vía Google también espera activación del admin
+      // (además le faltan las fotos del documento: las pedirá el panel DELI).
+      isActive: roleCode !== RoleTypeCode.DELIVERY,
       isEmailVerified: true,
     });
 

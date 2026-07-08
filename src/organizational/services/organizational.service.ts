@@ -99,6 +99,23 @@ export class OrganizationalService {
     return organizational;
   }
 
+  /**
+   * Negocio del que el usuario autenticado es dueño/representante legal
+   * (para la app del rol NEGO). Si tuviera varios, devuelve el primero.
+   */
+  async findMine(userId: string): Promise<Organizational> {
+    const organizational = await this._organizationalRepository.findOne({
+      where: { legalPersonId: userId },
+      relations: ['identificationType', 'municipality', 'department', 'tags'],
+    });
+    if (!organizational) {
+      throw new NotFoundException(
+        'Tu cuenta no tiene un negocio asociado. Contacta al administrador.',
+      );
+    }
+    return organizational;
+  }
+
   async paginatedList(
     params: PaginatedOrganizationalsParamsDto,
   ): Promise<ResponsePaginationDto<Organizational>> {
@@ -161,6 +178,35 @@ export class OrganizationalService {
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
 
     return new ResponsePaginationDto(entities, pagination);
+  }
+
+  /**
+   * Edición del negocio PROPIO (rol NEGO, desde su panel): el negocio se
+   * resuelve por el JWT y se ignoran los campos que solo maneja el admin
+   * (dueño, cuenta de acceso y estado activo).
+   */
+  async updateMine(
+    userId: string,
+    dto: UpdateOrganizationalDto,
+  ): Promise<Organizational> {
+    const mine = await this.findMine(userId);
+    const {
+      legalPersonId: _lp,
+      accountEmail: _ae,
+      accountPassword: _ap,
+      isActive: _ia,
+      ...data
+    } = dto;
+    return this.update(mine.id, data);
+  }
+
+  /** Logo del negocio propio (rol NEGO): resuelve el id desde el JWT. */
+  async updateMyLogo(
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<{ logoUrl: string }> {
+    const mine = await this.findMine(userId);
+    return this.updateLogo(mine.id, file);
   }
 
   async update(

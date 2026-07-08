@@ -10,16 +10,21 @@ import {
   Query,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
 import { Throttle } from '@nestjs/throttler';
 import { UserUC } from '../useCases/user.uc';
+import { RegisterDeliveryFiles } from '../services/user.service';
 import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import {
@@ -101,18 +106,31 @@ export class UserController {
     };
   }
 
+  /**
+   * Registro de repartidor: multipart/form-data con los campos del DTO más
+   * las fotos de verificación OBLIGATORIAS (`avatar`, `idFront`, `idBack`).
+   * La cuenta nace inactiva; un admin revisa los documentos y la activa.
+   */
   @Post('register/delivery')
   @SkipApiKey()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @RegisterUserDocs('repartidor')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'avatar', maxCount: 1 },
+      { name: 'idFront', maxCount: 1 },
+      { name: 'idBack', maxCount: 1 },
+    ]),
+  )
   async registerDelivery(
     @Body() body: RegisterUserDto,
+    @UploadedFiles() files: RegisterDeliveryFiles,
   ): Promise<CreatedRecordResponseDto> {
-    const user = await this._userUC.registerDelivery(body);
+    const user = await this._userUC.registerDelivery(body, files);
     return {
       statusCode: HttpStatus.CREATED,
       message:
-        '¡Registro exitoso! Te enviamos un correo para verificar tu cuenta.',
+        '¡Registro exitoso! Verifica tu correo. Un administrador revisará tus datos y activará tu cuenta de repartidor.',
       data: { rowId: user.id },
     };
   }

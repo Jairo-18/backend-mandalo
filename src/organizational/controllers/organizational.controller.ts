@@ -29,10 +29,14 @@ import {
 } from '../../shared/dtos/response.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { Organizational } from '../../shared/entities/organizational.entity';
+import { User } from '../../shared/entities/user.entity';
+import { GetUser } from '../../shared/decorators/user.decorator';
 import {
   CreateOrganizationalDocs,
   DeleteOrganizationalDocs,
+  FindMineOrganizationalDocs,
   FindOneOrganizationalDocs,
+  UpdateMineOrganizationalDocs,
   GetPaginatedOrganizationalsDocs,
   UpdateOrganizationalDocs,
   UploadLogoDocs,
@@ -63,6 +67,51 @@ export class OrganizationalController {
     @Query() params: PaginatedOrganizationalsParamsDto,
   ): Promise<ResponsePaginationDto<Organizational>> {
     return this._organizationalUC.paginatedList(params);
+  }
+
+  /**
+   * Negocio del usuario autenticado (dueño/representante legal). Lo usa la
+   * app del rol NEGO para la cabecera de su panel. OJO: debe declararse
+   * ANTES de `:id` para que "mine" no caiga en el ParseIntPipe.
+   */
+  @Get('mine')
+  @FindMineOrganizationalDocs()
+  async findMine(@GetUser() user: User) {
+    const organizational = await this._organizationalUC.findMine(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      data: organizational,
+    };
+  }
+
+  /** Edita el negocio propio (rol NEGO); ignora dueño/cuenta/estado activo. */
+  @Patch('mine')
+  @UpdateMineOrganizationalDocs()
+  async updateMine(
+    @GetUser() user: User,
+    @Body() body: UpdateOrganizationalDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._organizationalUC.updateMine(user.id, body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Negocio actualizado exitosamente',
+    };
+  }
+
+  /** Sube/reemplaza el logo del negocio propio (multipart, campo `file`). */
+  @Post('mine/logo')
+  @UploadLogoDocs()
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadMyLogo(
+    @GetUser() user: User,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._organizationalUC.updateMyLogo(user.id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Logo actualizado exitosamente',
+      data,
+    };
   }
 
   @Get(':id')

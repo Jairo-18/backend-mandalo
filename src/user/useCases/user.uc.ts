@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UserService } from '../services/user.service';
+import { RegisterDeliveryFiles, UserService } from '../services/user.service';
 import { CrudUserService } from '../services/crudUser.service';
 import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
@@ -20,8 +20,8 @@ export class UserUC {
     return this._userService.register(dto, RoleTypeCode.CLIENT);
   }
 
-  registerDelivery(dto: RegisterUserDto) {
-    return this._userService.register(dto, RoleTypeCode.DELIVERY);
+  registerDelivery(dto: RegisterUserDto, files: RegisterDeliveryFiles) {
+    return this._userService.register(dto, RoleTypeCode.DELIVERY, files);
   }
 
   verifyEmail(token: string, userId: string) {

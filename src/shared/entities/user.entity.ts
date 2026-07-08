@@ -93,6 +93,19 @@ export class User {
   @Column('varchar', { length: 500, nullable: true })
   avatarUrl?: string;
 
+  // Documento de identidad del repartidor (foto por delante y por detrás);
+  // los revisa un admin antes de activar la cuenta DELI.
+  @Column('varchar', { length: 500, nullable: true })
+  identificationFrontUrl?: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  identificationBackUrl?: string;
+
+  // Observaciones del admin para el usuario (p. ej. por qué su cuenta de
+  // repartidor aún no se activa: "la foto de la cédula está borrosa").
+  @Column('text', { nullable: true })
+  observations?: string;
+
   @Exclude()
   @Column('varchar', { length: 255, nullable: true })
   resetToken?: string;

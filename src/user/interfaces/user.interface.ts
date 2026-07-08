@@ -15,6 +15,9 @@ export interface UserPaginatedListItem {
   address: string | null;
   identificationNumber: string | null;
   avatarUrl: string | null;
+  identificationFrontUrl: string | null;
+  identificationBackUrl: string | null;
+  observations: string | null;
   isActive: boolean;
   isBanned: boolean;
   isEmailVerified: boolean;

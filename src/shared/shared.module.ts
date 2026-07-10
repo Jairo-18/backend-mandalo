@@ -20,6 +20,8 @@ import { PaidType } from './entities/paidType.entity';
 import { Tag } from './entities/tag.entity';
 import { Product } from './entities/product.entity';
 import { UserAddress } from './entities/userAddress.entity';
+import { Invoice } from './entities/invoice.entity';
+import { InvoiceDetail } from './entities/invoiceDetail.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
@@ -33,6 +35,8 @@ import { PaidTypeRepository } from './repositories/paidType.repository';
 import { TagRepository } from './repositories/tag.repository';
 import { ProductRepository } from './repositories/product.repository';
 import { UserAddressRepository } from './repositories/userAddress.repository';
+import { InvoiceRepository } from './repositories/invoice.repository';
+import { InvoiceDetailRepository } from './repositories/invoiceDetail.repository';
 
 @Module({})
 export class SharedModule {
@@ -93,6 +97,8 @@ export class SharedModule {
           Tag,
           Product,
           UserAddress,
+          Invoice,
+          InvoiceDetail,
         ]),
 
         PassportModule,
@@ -143,6 +149,8 @@ export class SharedModule {
         TagRepository,
         ProductRepository,
         UserAddressRepository,
+        InvoiceRepository,
+        InvoiceDetailRepository,
       ],
       exports: [
         JwtModule,
@@ -163,6 +171,8 @@ export class SharedModule {
         TagRepository,
         ProductRepository,
         UserAddressRepository,
+        InvoiceRepository,
+        InvoiceDetailRepository,
       ],
     };
   }

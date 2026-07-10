@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { CacheModule } from '@nestjs/cache-manager';
+import { createKeyv } from '@keyv/redis';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PassportModule } from '@nestjs/passport';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -18,6 +20,8 @@ import { TagModule } from './tag/tag.module';
 import { OrganizationalModule } from './organizational/organizational.module';
 import { ProductModule } from './product/product.module';
 import { UserAddressModule } from './userAddress/userAddress.module';
+import { ExploreModule } from './explore/explore.module';
+import { InvoiceModule } from './invoice/invoice.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -37,6 +41,21 @@ import { ScheduleModule } from '@nestjs/schedule';
         limit: 500,
       },
     ]),
+    // Caché de respuestas públicas-iguales-para-todos (/catalog, /explore) —
+    // ver plan en NOTAS §21. Sin REDIS_URL usa memoria (Keyv, cero infra);
+    // con REDIS_URL (Dokploy) migra el store a Redis sin tocar código.
+    // NUNCA cachear con CacheInterceptor lo autenticado-personal
+    // (/user-address, /invoice, /organizational/mine, /product).
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: () => {
+        const redisUrl = process.env.REDIS_URL || '';
+        return {
+          ttl: 60_000, // default (ms); cada endpoint lo ajusta con @CacheTTL
+          ...(redisUrl ? { stores: [createKeyv(redisUrl)] } : {}),
+        };
+      },
+    }),
     // Sirve las imágenes subidas (avatares, logos, productos) en /uploads.
     // Mismo directorio que usa LocalStorageService; en el VPS es un bind
     // mount de Dokploy para que sobreviva a los redeploys.
@@ -63,6 +82,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     OrganizationalModule,
     ProductModule,
     UserAddressModule,
+    ExploreModule,
+    InvoiceModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

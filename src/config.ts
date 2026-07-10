@@ -18,6 +18,8 @@ export const config = async () => {
       env: process.env.APP_ENV || 'development',
       baseUrl: process.env.APP_BASE_URL || '',
       clientApiKey: process.env.APP_CLIENT_API_KEY || '',
+      // Tarifa fija del domicilio (COP). Por distancia = fase 2.
+      deliveryFee: parseFloat(process.env.APP_DELIVERY_FEE as string) || 0,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

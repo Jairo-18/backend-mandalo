@@ -25,7 +25,17 @@ import { MailTemplateService } from '../../shared/services/mail-template.service
 import { Throttle } from '@nestjs/throttler';
 import { UserUC } from '../useCases/user.uc';
 import { RegisterDeliveryFiles } from '../services/user.service';
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
+import {
+  BecomeDeliveryDto,
+  ChangeMyPasswordDto,
+  CreateUserDto,
+  RegisterUserDto,
+  ResendVerificationDto,
+  UpdateMyProfileDto,
+  UpdateUserDto,
+} from '../dtos/user.dto';
+import { GetUser } from '../../shared/decorators/user.decorator';
+import { User } from '../../shared/entities/user.entity';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import {
   CreatedRecordResponseDto,
@@ -35,6 +45,9 @@ import {
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { UserPaginatedListItem } from '../interfaces/user.interface';
 import { SkipApiKey } from '../../shared/decorators/skip-api-key.decorator';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import {
   CreateUserDocs,
   DeleteUserDocs,
@@ -135,8 +148,26 @@ export class UserController {
     };
   }
 
+  /**
+   * Reenvía el correo de verificación (botón del login cuando el sign-in
+   * rechaza por correo sin verificar). Público, con throttle corto.
+   */
+  @Post('resend-verification')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async resendVerification(
+    @Body() body: ResendVerificationDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.resendVerification(body.email);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Te reenviamos el correo de verificación. Revisa tu bandeja.',
+    };
+  }
+
   @Post('create')
-  @UseGuards(AuthGuard())
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @CreateUserDocs()
   async create(
     @Body() body: CreateUserDto,
@@ -150,7 +181,8 @@ export class UserController {
   }
 
   @Get('paginated')
-  @UseGuards(AuthGuard())
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @GetPaginatedUsersDocs()
   async getPaginated(
     @Query() params: PaginatedUsersParamsDto,
@@ -158,8 +190,99 @@ export class UserController {
     return this._userUC.paginatedList(params);
   }
 
-  @Get(':id')
+  /**
+   * ---- Endpoints del PROPIO usuario (self-scoped por el JWT) ----
+   * Declarados ANTES de ':id' para que "me" no se interprete como un id
+   * (mismo patrón que /organizational/mine).
+   */
+
+  /** Perfil del usuario autenticado (con relaciones para el form del front). */
+  @Get('me')
   @UseGuards(AuthGuard())
+  async getMe(@GetUser() user: User) {
+    const data = await this._userUC.findOne(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      data,
+    };
+  }
+
+  /** Edición del propio perfil (DTO restringido: sin campos de admin/email). */
+  @Patch('me')
+  @UseGuards(AuthGuard())
+  async updateMe(
+    @GetUser() user: User,
+    @Body() body: UpdateMyProfileDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.updateMyProfile(user.id, body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Perfil actualizado exitosamente',
+    };
+  }
+
+  /** Cambio de contraseña con la contraseña actual como prueba. */
+  @Patch('me/password')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async changeMyPassword(
+    @GetUser() user: User,
+    @Body() body: ChangeMyPasswordDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.changePassword(user.id, body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Contraseña actualizada exitosamente',
+    };
+  }
+
+  /**
+   * Onboarding post-Google: convierte la cuenta autenticada en REPARTIDOR.
+   * Multipart con la identificación + las fotos de verificación (mismas del
+   * registro DELI). La cuenta queda inactiva hasta que un admin la revise.
+   */
+  @Post('me/become-delivery')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'avatar', maxCount: 1 },
+      { name: 'idFront', maxCount: 1 },
+      { name: 'idBack', maxCount: 1 },
+    ]),
+  )
+  async becomeDelivery(
+    @GetUser() user: User,
+    @Body() body: BecomeDeliveryDto,
+    @UploadedFiles() files: RegisterDeliveryFiles,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.becomeDelivery(user.id, body, files);
+    return {
+      statusCode: HttpStatus.OK,
+      message:
+        '¡Listo! Un administrador revisará tus datos y activará tu cuenta de repartidor.',
+    };
+  }
+
+  /** Sube/reemplaza la propia foto de perfil (multipart, campo `file`). */
+  @Post('me/avatar')
+  @UseGuards(AuthGuard())
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadMyAvatar(
+    @GetUser() user: User,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._userUC.updateAvatar(user.id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de perfil actualizada',
+      data,
+    };
+  }
+
+  @Get(':id')
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @FindOneUserDocs()
   async findOne(@Param('id') id: string) {
     const user = await this._userUC.findOne(id);
@@ -170,7 +293,8 @@ export class UserController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard())
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UpdateUserDocs()
   async update(
     @Param('id') id: string,
@@ -184,7 +308,8 @@ export class UserController {
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard())
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @DeleteUserDocs()
   async delete(@Param('id') id: string): Promise<DeleteRecordResponseDto> {
     await this._userUC.delete(id);
@@ -196,7 +321,8 @@ export class UserController {
 
   /** Sube/reemplaza la foto de perfil (multipart/form-data, campo `file`). */
   @Post(':id/avatar')
-  @UseGuards(AuthGuard())
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UploadAvatarDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(

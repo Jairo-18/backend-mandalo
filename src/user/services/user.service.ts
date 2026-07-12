@@ -16,12 +16,18 @@ import { DepartmentRepository } from '../../shared/repositories/department.repos
 import { IdentificationTypeRepository } from '../../shared/repositories/identificationType.repository';
 import { User } from '../../shared/entities/user.entity';
 import { NOT_FOUND_MESSAGE } from '../../shared/constants/messages.constant';
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
+import {
+  BecomeDeliveryDto,
+  CreateUserDto,
+  RegisterUserDto,
+  UpdateUserDto,
+} from '../dtos/user.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { MailsService } from '../../shared/services/mails.service';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
+import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
@@ -54,6 +60,7 @@ export class UserService {
     private readonly _mailTemplateService: MailTemplateService,
     private readonly _localStorageService: LocalStorageService,
     private readonly _userAddressRepository: UserAddressRepository,
+    private readonly _invoiceRepository: InvoiceRepository,
   ) {}
 
   async findOne(id: string): Promise<User> {
@@ -259,6 +266,40 @@ export class UserService {
       },
       HttpStatus.CONFLICT,
     );
+  }
+
+  /**
+   * Reenvía el correo de verificación (botón del login cuando el sign-in
+   * rechaza por correo sin verificar).
+   */
+  async resendVerification(email: string): Promise<void> {
+    const user = await this._userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
+    if (!user) {
+      throw new HttpException(
+        'No encontramos una cuenta con ese correo',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (user.isEmailVerified) {
+      throw new BadRequestException(
+        'Este correo ya está verificado. Inicia sesión.',
+      );
+    }
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      throw new HttpException(
+        {
+          message:
+            'No pudimos enviar el correo de verificación. Inténtalo de nuevo en unos minutos.',
+          code: 'VERIFICATION_EMAIL_FAILED',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
   }
 
   private async sendVerificationEmail(user: User): Promise<void> {
@@ -527,9 +568,148 @@ export class UserService {
     return await this._userRepository.save(user);
   }
 
+  /**
+   * Eliminar es DESTRUCTIVO: `invoice.userId` es CASCADE, así que borrar una
+   * cuenta con pedidos borraría su historial (facturas). Si tiene pedidos
+   * (como cliente o como repartidor) se bloquea con 409 — el camino correcto
+   * es desactivar o banear la cuenta.
+   */
   async delete(id: string): Promise<void> {
     const user = await this.findOne(id);
+    const orders = await this._invoiceRepository.count({
+      where: [{ userId: user.id }, { deliveryUserId: user.id }],
+    });
+    if (orders > 0) {
+      throw new ConflictException(
+        'Esta cuenta tiene pedidos en el historial y no se puede eliminar. Desactívala o banéala en su lugar.',
+      );
+    }
     await this._userRepository.delete(user.id);
+  }
+
+  /**
+   * Cambio de contraseña del propio usuario: exige la contraseña actual.
+   * Las cuentas creadas con Google tienen una contraseña aleatoria que el
+   * usuario no conoce — su camino es "olvidé mi contraseña" (código al correo).
+   */
+  async changePassword(
+    id: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.findOne(id);
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new BadRequestException('La contraseña actual no es correcta');
+    }
+
+    const password = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await this._userRepository.update(id, { password });
+  }
+
+  /**
+   * Vincula una cuenta de Google al usuario YA autenticado (botón "Vincular
+   * con Google" del perfil). El correo de Google no tiene que coincidir con
+   * el de la cuenta; lo único prohibido es que ese googleId ya pertenezca a
+   * OTRO usuario.
+   */
+  async linkGoogleAccount(
+    userId: string,
+    profile: GoogleUserProfile,
+  ): Promise<void> {
+    const existing = await this._userRepository.findOne({
+      where: { googleId: profile.googleId },
+    });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException(
+        'Esa cuenta de Google ya está vinculada a otro usuario',
+      );
+    }
+    if (existing) return; // ya estaba vinculada a esta misma cuenta
+
+    const user = await this.findOne(userId);
+    await this._userRepository.update(userId, {
+      googleId: profile.googleId,
+      // El avatar de Google solo entra si el usuario no tiene foto propia.
+      avatarUrl: user.avatarUrl || profile.avatarUrl,
+    });
+  }
+
+  /**
+   * Onboarding post-Google: convierte la cuenta autenticada en REPARTIDOR.
+   * Exige las mismas fotos de verificación del registro DELI normal y deja
+   * la cuenta INACTIVA para que un admin la revise. El avatar de Google se
+   * reemplaza por la foto del rostro (es la que revisa el admin).
+   */
+  async becomeDelivery(
+    userId: string,
+    dto: BecomeDeliveryDto,
+    files?: RegisterDeliveryFiles,
+  ): Promise<void> {
+    if (!files?.avatar?.[0]) {
+      throw new BadRequestException('La foto de tu rostro es obligatoria');
+    }
+    if (!files?.idFront?.[0] || !files?.idBack?.[0]) {
+      throw new BadRequestException(
+        'Las fotos de tu documento (por delante y por detrás) son obligatorias',
+      );
+    }
+
+    const user = await this.findOne(userId);
+    if (user.roleType?.code === RoleTypeCode.ADMIN) {
+      throw new BadRequestException(
+        'Una cuenta de administrador no puede volverse repartidor.',
+      );
+    }
+
+    const identificationType = await this._identificationTypeRepository.findOne(
+      { where: { id: dto.identificationTypeId } },
+    );
+    if (!identificationType) {
+      throw new BadRequestException('El tipo de identificación no es válido');
+    }
+    if (dto.identificationNumber !== user.identificationNumber) {
+      await this.assertIdentificationAvailable(dto.identificationNumber);
+    }
+
+    const roleType = await this._roleTypeRepository.findOne({
+      where: { code: RoleTypeCode.DELIVERY },
+    });
+    if (!roleType) {
+      throw new BadRequestException(
+        'El rol de repartidor no está configurado en la base de datos',
+      );
+    }
+
+    const [avatar, idFront, idBack] = await Promise.all([
+      this._localStorageService.saveImage(files.avatar[0], 'users'),
+      this._localStorageService.saveImage(files.idFront[0], 'users'),
+      this._localStorageService.saveImage(files.idBack[0], 'users'),
+    ]);
+
+    await this._userRepository.update(userId, {
+      roleTypeId: roleType.id,
+      isActive: false,
+      identificationNumber: dto.identificationNumber,
+      identificationTypeId: dto.identificationTypeId,
+      avatarUrl: avatar.imageUrl,
+      identificationFrontUrl: idFront.imageUrl,
+      identificationBackUrl: idBack.imageUrl,
+    });
+  }
+
+  /**
+   * Quita el vínculo con Google. La cuenta sigue entrando por correo +
+   * contraseña (si nació con Google y nunca la definió, se recupera con
+   * "¿Olvidaste tu contraseña?"). El avatar no se toca.
+   */
+  async unlinkGoogleAccount(userId: string): Promise<void> {
+    const user = await this.findOne(userId);
+    if (!user.googleId) {
+      throw new BadRequestException('Tu cuenta no está vinculada con Google.');
+    }
+    await this._userRepository.update(userId, { googleId: null });
   }
 
   /**

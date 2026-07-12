@@ -5,8 +5,10 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -88,6 +90,20 @@ export class UpdateInvoiceStateDto {
   @IsString()
   @MaxLength(255)
   cancellationReason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Minutos de preparación que promete el negocio (obligatorio al ACEPTAR)',
+    example: 20,
+    minimum: 5,
+    maximum: 180,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(5)
+  @Max(180)
+  prepEstimatedMinutes?: number;
 }
 
 /** Parámetros del listado paginado; filtro opcional por estados (coma-separados). */
@@ -99,4 +115,19 @@ export class PaginatedInvoicesParamsDto extends ParamsPaginationDto {
   @IsOptional()
   @IsString()
   stateCodes?: string;
+
+  // Coordenadas del repartidor (solo /invoice/available): limita a pedidos
+  // cuyo negocio esté dentro del radio APP_NEARBY_RADIUS_KM y ordena por
+  // cercanía al punto de recogida.
+  @ApiPropertyOptional({ description: 'Latitud del repartidor', example: 1.0285 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lat?: number;
+
+  @ApiPropertyOptional({ description: 'Longitud del repartidor', example: -76.6226 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  lng?: number;
 }

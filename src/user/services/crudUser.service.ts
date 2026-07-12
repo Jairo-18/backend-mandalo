@@ -97,6 +97,12 @@ export class CrudUserService {
       });
     }
 
+    if (params.isEmailVerified !== undefined) {
+      query.andWhere('user.isEmailVerified = :isEmailVerified', {
+        isEmailVerified: params.isEmailVerified,
+      });
+    }
+
     if (params.search) {
       const search = `%${params.search.trim()}%`;
       query.andWhere(

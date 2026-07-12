@@ -33,7 +33,12 @@ import {
   GetPaginatedTagsDocs,
   UpdateTagDocs,
 } from '../decorators/tag.decorators';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
+// Escrituras solo ADMIN; las lecturas quedan con JWT porque el panel del
+// NEGO también las usa (chips de etiquetas en "Editar mi negocio").
 @Controller('tag')
 @ApiTags('Etiquetas de negocio')
 @UseGuards(AuthGuard())
@@ -41,6 +46,8 @@ export class TagController {
   constructor(private readonly _tagUC: TagUC) {}
 
   @Post('create')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @CreateTagDocs()
   async create(@Body() body: CreateTagDto): Promise<CreatedRecordResponseDto> {
     const tag = await this._tagUC.create(body);
@@ -70,6 +77,8 @@ export class TagController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UpdateTagDocs()
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -83,6 +92,8 @@ export class TagController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @DeleteTagDocs()
   async delete(
     @Param('id', ParseIntPipe) id: number,

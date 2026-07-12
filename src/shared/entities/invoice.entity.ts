@@ -112,12 +112,42 @@ export class Invoice {
   @Column('varchar', { length: 255, nullable: true })
   cancellationReason?: string;
 
+  // ---- Tiempos del flujo: cuándo ocurrió cada transición ----
+  // timestamptz (instante absoluto): createdAt lo escribe Postgres y las
+  // transiciones Node — con `timestamp` a secas se mezclaban los relojes.
+  @Column('timestamptz', { nullable: true })
+  acceptedAt?: Date | null;
+
+  @Column('timestamptz', { nullable: true })
+  preparingAt?: Date | null;
+
+  // Cuándo un repartidor TOMÓ el pedido (claim)
+  @Column('timestamptz', { nullable: true })
+  takenAt?: Date | null;
+
+  @Column('timestamptz', { nullable: true })
+  onRouteAt?: Date | null;
+
+  @Column('timestamptz', { nullable: true })
+  deliveredAt?: Date | null;
+
+  @Column('timestamptz', { nullable: true })
+  cancelledAt?: Date | null;
+
+  // Minutos de preparación que el NEGOCIO promete al aceptar el pedido
+  @Column('int', { nullable: true })
+  prepEstimatedMinutes?: number | null;
+
+  // Minutos de entrega estimados al despachar (distancia o tarifa fija)
+  @Column('int', { nullable: true })
+  deliveryEstimatedMinutes?: number | null;
+
   @OneToMany(() => InvoiceDetail, (detail) => detail.invoice)
   details?: InvoiceDetail[];
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt?: Date;
 
-  @UpdateDateColumn({ type: 'timestamp', nullable: true })
+  @UpdateDateColumn({ type: 'timestamptz', nullable: true })
   updatedAt?: Date;
 }

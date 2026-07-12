@@ -96,4 +96,10 @@ export class PaginatedUsersParamsDto extends ParamsPaginationDto {
   @Transform(toBoolean)
   @IsBoolean()
   isBanned?: boolean;
+
+  @ApiPropertyOptional({ type: Boolean })
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isEmailVerified?: boolean;
 }

@@ -12,6 +12,7 @@ import { UserRepository } from '../../shared/repositories/user.repository';
 import { DepartmentRepository } from '../../shared/repositories/department.repository';
 import { MunicipalityRepository } from '../../shared/repositories/municipality.repository';
 import { IdentificationTypeRepository } from '../../shared/repositories/identificationType.repository';
+import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { UserService } from '../../user/services/user.service';
@@ -45,6 +46,7 @@ export class OrganizationalService {
     private readonly _roleTypeRepository: RoleTypeRepository,
     private readonly _userService: UserService,
     private readonly _localStorageService: LocalStorageService,
+    private readonly _invoiceRepository: InvoiceRepository,
   ) {}
 
   async create(dto: CreateOrganizationalDto): Promise<Organizational> {
@@ -238,8 +240,21 @@ export class OrganizationalService {
     return await this._organizationalRepository.save(organizational);
   }
 
+  /**
+   * Eliminar es DESTRUCTIVO: `invoice.organizationalId` es CASCADE, así que
+   * borrar un negocio con pedidos borraría el historial (facturas). Se
+   * bloquea con 409 — el camino correcto es desactivarlo.
+   */
   async delete(id: number): Promise<void> {
     const organizational = await this.findOne(id);
+    const orders = await this._invoiceRepository.count({
+      where: { organizationalId: organizational.id },
+    });
+    if (orders > 0) {
+      throw new ConflictException(
+        'Este negocio tiene pedidos en el historial y no se puede eliminar. Desactívalo en su lugar.',
+      );
+    }
     await this._organizationalRepository.remove(organizational);
   }
 

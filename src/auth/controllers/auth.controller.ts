@@ -21,6 +21,8 @@ import {
   SignOutDocs,
 } from '../decorators/auth.decorators';
 import { SkipApiKey } from '../../shared/decorators/skip-api-key.decorator';
+import { GetUser } from '../../shared/decorators/user.decorator';
+import { User } from '../../shared/entities/user.entity';
 
 @Controller('auth')
 @ApiTags('Autenticación')
@@ -57,6 +59,39 @@ export class AuthController {
         user: data.user,
         accessSessionId: data.session?.accessSessionId,
       },
+    };
+  }
+
+  /**
+   * Vincula una cuenta de Google al usuario autenticado (pantalla Mi perfil).
+   * Mismo idToken del sign-in nativo; acá NO crea cuentas ni inicia sesión.
+   */
+  @Post('/link-google')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async linkGoogle(
+    @GetUser() user: User,
+    @Body() body: GoogleSignInDto,
+  ): Promise<MessageResponseDto> {
+    await this._authUC.linkGoogle(user.id, body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Cuenta de Google vinculada exitosamente',
+    };
+  }
+
+  /**
+   * Desvincula la cuenta de Google del usuario autenticado. El acceso queda
+   * solo por correo + contraseña (recuperable con "¿Olvidaste tu contraseña?").
+   */
+  @Post('/unlink-google')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async unlinkGoogle(@GetUser() user: User): Promise<MessageResponseDto> {
+    await this._authUC.unlinkGoogle(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Cuenta de Google desvinculada exitosamente',
     };
   }
 

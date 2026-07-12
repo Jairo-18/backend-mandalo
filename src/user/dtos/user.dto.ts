@@ -204,6 +204,119 @@ export class RegisterUserDto {
 }
 
 /**
+ * Edición del PROPIO perfil (pantalla "Mi perfil" de la app, cualquier rol).
+ * Subconjunto sin campos de administración (rol, isActive/isBanned,
+ * observations), sin email (cambiarlo exigiría re-verificar el correo) y sin
+ * contraseña (tiene su propio endpoint que exige la actual).
+ */
+export class UpdateMyProfileDto {
+  @ApiPropertyOptional({ example: 'Juan Pérez' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre completo es requerido' })
+  @MaxLength(100)
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: 'juanp' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  username?: string;
+
+  @ApiPropertyOptional({ example: '3001234567' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+
+  @ApiPropertyOptional({ example: 'Calle 1 # 2-3' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  address?: string;
+
+  @ApiPropertyOptional({ example: 1.0287 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: -76.6272 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
+  @ApiPropertyOptional({ description: 'ID del departamento', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  departmentId?: number;
+
+  @ApiPropertyOptional({ description: 'ID del municipio', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  municipalityId?: number;
+
+  @ApiPropertyOptional({ example: '1090123456' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  identificationNumber?: string;
+
+  @ApiPropertyOptional({ description: 'ID del tipo de identificación', type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  identificationTypeId?: number;
+}
+
+/** Reenviar el correo de verificación (público, botón del login). */
+export class ResendVerificationDto {
+  @ApiProperty({ example: 'juan@correo.com' })
+  @IsEmail({}, { message: 'El email no es válido' })
+  @MaxLength(150)
+  email: string;
+}
+
+/**
+ * Onboarding post-Google: la cuenta (creada como USER por el sign-in) se
+ * convierte en repartidor. Va en multipart junto con las fotos de
+ * verificación (`avatar`, `idFront`, `idBack`), por eso los @Type(Number).
+ */
+export class BecomeDeliveryDto {
+  @ApiProperty({ example: 'AB1234567' })
+  @IsString()
+  @IsNotEmpty({ message: 'El número de identificación es requerido' })
+  @MaxLength(50)
+  identificationNumber: string;
+
+  @ApiProperty({ description: 'ID del tipo de identificación', type: Number })
+  @Type(() => Number)
+  @IsInt()
+  identificationTypeId: number;
+}
+
+/** Cambio de contraseña del propio usuario (exige la contraseña actual). */
+export class ChangeMyPasswordDto {
+  @ApiProperty({ example: 'Actual@123' })
+  @IsString()
+  @IsNotEmpty({ message: 'La contraseña actual es requerida' })
+  currentPassword: string;
+
+  @ApiProperty({ example: 'Nueva@123', minLength: 8 })
+  @IsString()
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @MaxLength(255)
+  newPassword: string;
+}
+
+/**
  * Edición de usuario. Todo opcional (PartialType de create) más flags que solo
  * un administrador debería tocar.
  */

@@ -31,6 +31,9 @@ import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { User } from '../../shared/entities/user.entity';
 import { GetUser } from '../../shared/decorators/user.decorator';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import {
   CreateOrganizationalDocs,
   DeleteOrganizationalDocs,
@@ -42,6 +45,8 @@ import {
   UploadLogoDocs,
 } from '../decorators/organizational.decorators';
 
+// El CRUD es del panel ADMIN (@Roles por ruta); los endpoints `mine/*` son
+// del rol NEGO y solo exigen JWT (el service resuelve el negocio del token).
 @Controller('organizational')
 @ApiTags('Negocios')
 @UseGuards(AuthGuard())
@@ -49,6 +54,8 @@ export class OrganizationalController {
   constructor(private readonly _organizationalUC: OrganizationalUC) {}
 
   @Post('create')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @CreateOrganizationalDocs()
   async create(
     @Body() body: CreateOrganizationalDto,
@@ -62,6 +69,8 @@ export class OrganizationalController {
   }
 
   @Get('paginated')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @GetPaginatedOrganizationalsDocs()
   async getPaginated(
     @Query() params: PaginatedOrganizationalsParamsDto,
@@ -115,6 +124,8 @@ export class OrganizationalController {
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @FindOneOrganizationalDocs()
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const organizational = await this._organizationalUC.findOne(id);
@@ -125,6 +136,8 @@ export class OrganizationalController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UpdateOrganizationalDocs()
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -138,6 +151,8 @@ export class OrganizationalController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @DeleteOrganizationalDocs()
   async delete(
     @Param('id', ParseIntPipe) id: number,
@@ -151,6 +166,8 @@ export class OrganizationalController {
 
   /** Sube/reemplaza el logo del negocio (multipart/form-data, campo `file`). */
   @Post(':id/logo')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UploadLogoDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadLogo(

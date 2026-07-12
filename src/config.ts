@@ -20,6 +20,14 @@ export const config = async () => {
       clientApiKey: process.env.APP_CLIENT_API_KEY || '',
       // Tarifa fija del domicilio (COP). Por distancia = fase 2.
       deliveryFee: parseFloat(process.env.APP_DELIVERY_FEE as string) || 0,
+      // Minutos de entrega por defecto cuando faltan coordenadas para
+      // estimar por distancia (negocio o dirección sin lat/lng).
+      deliveryEtaMinutes:
+        parseInt(process.env.APP_DELIVERY_ETA_MINUTES as string, 10) || 20,
+      // Radio (km) de cercanía: negocios que ve el cliente en el explorar y
+      // pedidos disponibles que ve el repartidor.
+      nearbyRadiusKm:
+        parseFloat(process.env.APP_NEARBY_RADIUS_KM as string) || 10,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

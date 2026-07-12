@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { SelectQueryBuilder } from 'typeorm';
 import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { TagRepository } from '../../shared/repositories/tag.repository';
@@ -26,6 +28,7 @@ export class ExploreService {
     private readonly _productRepository: ProductRepository,
     private readonly _tagRepository: TagRepository,
     private readonly _categoryTypeRepository: CategoryTypeRepository,
+    private readonly _configService: ConfigService,
   ) {}
 
   /** Un negocio es visible si está activo Y tiene al menos un producto activo. */
@@ -34,6 +37,32 @@ export class ExploreService {
       SELECT 1 FROM "product" p
       WHERE p."organizationalId" = organizational.id AND p."isActive" = true
     )`;
+
+  /**
+   * Limita el listado a negocios dentro del radio de cercanía
+   * (APP_NEARBY_RADIUS_KM) medido desde las coords del cliente — su
+   * dirección principal ("enviar a"). Haversine en SQL; los negocios SIN
+   * coordenadas quedan fuera (no se pueden ubicar). Sin lat/lng no filtra.
+   */
+  private applyNearFilter(
+    query: SelectQueryBuilder<unknown>,
+    lat?: number,
+    lng?: number,
+  ): void {
+    if (lat == null || lng == null) return;
+    const radiusKm =
+      this._configService.get<number>('app.nearbyRadiusKm') ?? 10;
+    query
+      .andWhere(
+        'organizational.latitude IS NOT NULL AND organizational.longitude IS NOT NULL',
+      )
+      .andWhere(
+        `(6371 * acos(least(1, cos(radians(:nearLat)) * cos(radians(organizational.latitude))
+          * cos(radians(organizational.longitude) - radians(:nearLng))
+          + sin(radians(:nearLat)) * sin(radians(organizational.latitude))))) <= :radiusKm`,
+        { nearLat: lat, nearLng: lng, radiusKm },
+      );
+  }
 
   /**
    * Etiquetas y categorías para los chips de filtros del home.
@@ -113,6 +142,8 @@ export class ExploreService {
         { tagIds: params.tagIds },
       );
     }
+
+    this.applyNearFilter(query, params.lat, params.lng);
 
     const [entities, itemCount] = await query.getManyAndCount();
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
@@ -206,6 +237,8 @@ export class ExploreService {
         categoryTypeId: params.categoryTypeId,
       });
     }
+
+    this.applyNearFilter(query, params.lat, params.lng);
 
     const [entities, itemCount] = await query.getManyAndCount();
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });

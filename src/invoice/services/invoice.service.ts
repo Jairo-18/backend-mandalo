@@ -245,17 +245,43 @@ export class InvoiceService {
 
     const prepState = await this.resolveState(StateTypeCode.PREPARING);
 
-    const [entities, itemCount] = await this._invoiceRepository
+    const query = this._invoiceRepository
       .createQueryBuilder('invoice')
       .leftJoinAndSelect('invoice.organizational', 'organizational')
       .leftJoinAndSelect('invoice.stateType', 'stateType')
       .leftJoinAndSelect('invoice.paidType', 'paidType')
       .where('invoice.stateTypeId = :prep', { prep: prepState.id })
-      .andWhere('invoice.deliveryUserId IS NULL')
-      .skip(skip)
-      .take(perPage)
-      .orderBy('invoice.createdAt', 'ASC')
-      .getManyAndCount();
+      .andWhere('invoice.deliveryUserId IS NULL');
+
+    if (params.lat != null && params.lng != null) {
+      // Solo pedidos cuyo NEGOCIO (punto de recogida) esté a ≤ radio km del
+      // repartidor, ordenados por cercanía. offset/limit en vez de skip/take:
+      // el orderBy con expresión cruda rompe la subquery DISTINCT del
+      // paginado con joins (gotcha §20 de NOTAS) — aquí todos los joins son
+      // ManyToOne (sin duplicar filas), así que es equivalente.
+      const radiusKm =
+        this._configService.get<number>('app.nearbyRadiusKm') ?? 10;
+      const distanceSql = `(6371 * acos(least(1, cos(radians(:nearLat)) * cos(radians(organizational.latitude))
+        * cos(radians(organizational.longitude) - radians(:nearLng))
+        + sin(radians(:nearLat)) * sin(radians(organizational.latitude)))))`;
+      query
+        .andWhere(
+          'organizational.latitude IS NOT NULL AND organizational.longitude IS NOT NULL',
+        )
+        .andWhere(`${distanceSql} <= :radiusKm`, {
+          nearLat: params.lat,
+          nearLng: params.lng,
+          radiusKm,
+        })
+        .orderBy(distanceSql, 'ASC')
+        .addOrderBy('invoice.createdAt', 'ASC')
+        .offset(skip)
+        .limit(perPage);
+    } else {
+      query.orderBy('invoice.createdAt', 'ASC').skip(skip).take(perPage);
+    }
+
+    const [entities, itemCount] = await query.getManyAndCount();
 
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
     return new ResponsePaginationDto(entities, pagination);
@@ -272,7 +298,7 @@ export class InvoiceService {
     const result = await this._invoiceRepository
       .createQueryBuilder()
       .update(Invoice)
-      .set({ deliveryUserId: user.id })
+      .set({ deliveryUserId: user.id, takenAt: new Date() })
       .where('id = :id', { id })
       .andWhere('stateTypeId = :prep', { prep: prepState.id })
       .andWhere('deliveryUserId IS NULL')
@@ -335,12 +361,20 @@ export class InvoiceService {
       );
     }
 
+    // Al aceptar, el negocio se compromete con un tiempo de preparación.
+    if (target === StateTypeCode.ACCEPTED && !dto.prepEstimatedMinutes) {
+      throw new BadRequestException(
+        'Indica en cuántos minutos estará listo el pedido.',
+      );
+    }
+
     const targetState = await this.resolveState(target);
     invoice.stateTypeId = targetState.id;
     invoice.stateType = targetState;
     if (target === StateTypeCode.CANCELLED) {
       invoice.cancellationReason = dto.cancellationReason ?? null;
     }
+    this.stampTransition(invoice, target, dto);
     await this._invoiceRepository.save(invoice);
 
     const full = await this.findByIdWithRelations(id);
@@ -349,6 +383,82 @@ export class InvoiceService {
   }
 
   // ---------- helpers ----------
+
+  /**
+   * Sella el timestamp de la transición y guarda los estimados: al ACEPTAR,
+   * los minutos que promete el negocio; al DESPACHAR (RUTA), la estimación de
+   * entrega por distancia (o el fijo de config si faltan coordenadas).
+   */
+  private stampTransition(
+    invoice: Invoice,
+    target: StateTypeCode,
+    dto: UpdateInvoiceStateDto,
+  ): void {
+    const now = new Date();
+    switch (target) {
+      case StateTypeCode.ACCEPTED:
+        invoice.acceptedAt = now;
+        invoice.prepEstimatedMinutes = dto.prepEstimatedMinutes ?? null;
+        break;
+      case StateTypeCode.PREPARING:
+        invoice.preparingAt = now;
+        break;
+      case StateTypeCode.ON_ROUTE:
+        invoice.onRouteAt = now;
+        invoice.deliveryEstimatedMinutes = this.estimateDeliveryMinutes(invoice);
+        break;
+      case StateTypeCode.DELIVERED:
+        invoice.deliveredAt = now;
+        break;
+      case StateTypeCode.CANCELLED:
+        invoice.cancelledAt = now;
+        break;
+    }
+  }
+
+  /**
+   * Minutos estimados de entrega: distancia en línea recta entre el negocio y
+   * la dirección del pedido (coords ya guardadas) × factor de ruta real (1.3)
+   * a ~25 km/h de moto urbana + 5 min de margen, acotado a 10–90 min. Si
+   * faltan coordenadas cae al fijo APP_DELIVERY_ETA_MINUTES.
+   */
+  private estimateDeliveryMinutes(invoice: Invoice): number {
+    const fallback =
+      this._configService.get<number>('app.deliveryEtaMinutes') ?? 20;
+    const org = invoice.organizational;
+    if (
+      org?.latitude == null ||
+      org?.longitude == null ||
+      invoice.deliveryLatitude == null ||
+      invoice.deliveryLongitude == null
+    ) {
+      return fallback;
+    }
+    const distKm = this.haversineKm(
+      org.latitude,
+      org.longitude,
+      invoice.deliveryLatitude,
+      invoice.deliveryLongitude,
+    );
+    const minutes = Math.round(((distKm * 1.3) / 25) * 60) + 5;
+    return Math.min(Math.max(minutes, 10), 90);
+  }
+
+  /** Distancia en km entre dos coordenadas (fórmula de haversine). */
+  private haversineKm(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 
   private broadcastStateChange(invoice: Invoice, target: StateTypeCode): void {
     // Cliente y negocio siempre quieren saber.

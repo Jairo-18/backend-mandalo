@@ -55,11 +55,13 @@ export class AuthService {
       const tokenExpired =
         !user.emailVerificationTokenExpiry ||
         user.emailVerificationTokenExpiry < new Date();
-      throw new UnauthorizedException(
-        tokenExpired
-          ? 'Tu enlace de verificación expiró. Vuelve a registrarte.'
+      // El `code` le dice al front que muestre el botón de reenviar.
+      throw new UnauthorizedException({
+        message: tokenExpired
+          ? 'Tu enlace de verificación expiró. Reenvíalo para recibir uno nuevo.'
           : 'Debes verificar tu correo electrónico antes de iniciar sesión.',
-      );
+        code: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     return await this.buildSignInResponse(user);
@@ -71,31 +73,7 @@ export class AuthService {
    * y se busca/crea/vincula la cuenta (googleId).
    */
   async googleSignIn(body: GoogleSignInDto) {
-    const audience = [
-      this._configService.get<string>('google.webClientId'),
-      this._configService.get<string>('google.androidClientId'),
-    ].filter(Boolean);
-
-    if (!audience.length) {
-      throw new UnauthorizedException(
-        'La autenticación con Google no está configurada en el servidor',
-      );
-    }
-
-    let payload;
-    try {
-      const ticket = await this._googleClient.verifyIdToken({
-        idToken: body.idToken,
-        audience,
-      });
-      payload = ticket.getPayload();
-    } catch {
-      throw new UnauthorizedException('No se pudo autenticar con Google');
-    }
-
-    if (!payload?.sub || !payload.email) {
-      throw new UnauthorizedException('No se pudo autenticar con Google');
-    }
+    const payload = await this.verifyGoogleIdToken(body.idToken);
 
     const roleCode =
       body.role === 'delivery' ? RoleTypeCode.DELIVERY : RoleTypeCode.CLIENT;
@@ -113,6 +91,57 @@ export class AuthService {
     this.assertNotBanned(user);
 
     return await this.buildSignInResponse(user, isNewUser);
+  }
+
+  /**
+   * Vincula una cuenta de Google al usuario YA autenticado (botón "Vincular
+   * con Google" de la pantalla Mi perfil). Verifica el idToken igual que el
+   * sign-in y delega la vinculación en UserService.
+   */
+  async linkGoogle(userId: string, idToken: string): Promise<void> {
+    const payload = await this.verifyGoogleIdToken(idToken);
+    await this._userService.linkGoogleAccount(userId, {
+      googleId: payload.sub,
+      email: payload.email,
+      fullName: payload.name || payload.email.split('@')[0],
+      avatarUrl: payload.picture,
+    });
+  }
+
+  /** Quita el vínculo con Google (queda el acceso por correo + contraseña). */
+  async unlinkGoogle(userId: string): Promise<void> {
+    await this._userService.unlinkGoogleAccount(userId);
+  }
+
+  /** Verifica un idToken de Google contra los client ids configurados. */
+  private async verifyGoogleIdToken(idToken: string) {
+    const audience = [
+      this._configService.get<string>('google.webClientId'),
+      this._configService.get<string>('google.androidClientId'),
+    ].filter(Boolean);
+
+    if (!audience.length) {
+      throw new UnauthorizedException(
+        'La autenticación con Google no está configurada en el servidor',
+      );
+    }
+
+    let payload;
+    try {
+      const ticket = await this._googleClient.verifyIdToken({
+        idToken,
+        audience,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('No se pudo autenticar con Google');
+    }
+
+    if (!payload?.sub || !payload.email) {
+      throw new UnauthorizedException('No se pudo autenticar con Google');
+    }
+
+    return payload;
   }
 
   /** Recuperación de contraseña (la lógica vive en UserService). */

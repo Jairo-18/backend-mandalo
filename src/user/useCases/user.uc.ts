@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { RegisterDeliveryFiles, UserService } from '../services/user.service';
 import { CrudUserService } from '../services/crudUser.service';
-import { CreateUserDto, RegisterUserDto, UpdateUserDto } from '../dtos/user.dto';
+import {
+  BecomeDeliveryDto,
+  ChangeMyPasswordDto,
+  CreateUserDto,
+  RegisterUserDto,
+  UpdateMyProfileDto,
+  UpdateUserDto,
+} from '../dtos/user.dto';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
@@ -28,6 +35,10 @@ export class UserUC {
     return this._userService.verifyEmail(token, userId);
   }
 
+  resendVerification(email: string) {
+    return this._userService.resendVerification(email);
+  }
+
   findOne(id: string) {
     return this._userService.findOne(id);
   }
@@ -38,6 +49,24 @@ export class UserUC {
 
   update(id: string, dto: UpdateUserDto) {
     return this._userService.update(id, dto);
+  }
+
+  /** Edición del propio perfil (DTO restringido, sin campos de admin). */
+  updateMyProfile(id: string, dto: UpdateMyProfileDto) {
+    return this._userService.update(id, dto);
+  }
+
+  /** Onboarding post-Google: la cuenta se convierte en repartidor (inactiva). */
+  becomeDelivery(id: string, dto: BecomeDeliveryDto, files: RegisterDeliveryFiles) {
+    return this._userService.becomeDelivery(id, dto, files);
+  }
+
+  changePassword(id: string, dto: ChangeMyPasswordDto) {
+    return this._userService.changePassword(
+      id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   delete(id: string) {

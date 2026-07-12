@@ -21,6 +21,14 @@ export class AuthUC {
     return await this._authService.googleSignIn(body);
   }
 
+  async linkGoogle(userId: string, body: GoogleSignInDto) {
+    return await this._authService.linkGoogle(userId, body.idToken);
+  }
+
+  async unlinkGoogle(userId: string) {
+    return await this._authService.unlinkGoogle(userId);
+  }
+
   async refreshToken(body: RefreshTokenBodyDto) {
     return this._authService.refreshToken(body);
   }

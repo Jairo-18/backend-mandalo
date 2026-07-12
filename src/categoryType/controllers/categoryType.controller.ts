@@ -33,7 +33,12 @@ import {
   GetPaginatedCategoryTypesDocs,
   UpdateCategoryTypeDocs,
 } from '../decorators/categoryType.decorators';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
+// Escrituras solo ADMIN; las lecturas quedan con JWT porque el panel del
+// NEGO también las usa (Select de categoría en su form de producto).
 @Controller('category-type')
 @ApiTags('Categorías de producto')
 @UseGuards(AuthGuard())
@@ -41,6 +46,8 @@ export class CategoryTypeController {
   constructor(private readonly _categoryTypeUC: CategoryTypeUC) {}
 
   @Post('create')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @CreateCategoryTypeDocs()
   async create(
     @Body() body: CreateCategoryTypeDto,
@@ -72,6 +79,8 @@ export class CategoryTypeController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @UpdateCategoryTypeDocs()
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -85,6 +94,8 @@ export class CategoryTypeController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
   @DeleteCategoryTypeDocs()
   async delete(
     @Param('id', ParseIntPipe) id: number,

@@ -94,6 +94,22 @@ export class Organizational {
   @OneToMany(() => Product, (product) => product.organizational)
   products?: Product[];
 
+  // Horario de atención (hora local de Colombia). Sin horario configurado el
+  // negocio se considera siempre abierto. closeTime < openTime = nocturno.
+  @Column('varchar', { length: 5, nullable: true })
+  openTime?: string | null;
+
+  @Column('varchar', { length: 5, nullable: true })
+  closeTime?: string | null;
+
+  // Días que abre: números JS 0–6 (0=domingo) separados por coma. Null = todos.
+  @Column('varchar', { length: 20, nullable: true })
+  openDays?: string | null;
+
+  // Candado manual del negocio: "cerrado temporalmente" aunque esté en horario.
+  @Column('boolean', { default: false })
+  temporarilyClosed: boolean;
+
   @Column('boolean', { default: true })
   isActive: boolean;
 

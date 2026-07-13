@@ -316,6 +316,15 @@ export class ChangeMyPasswordDto {
   newPassword: string;
 }
 
+/** Token de notificaciones push del dispositivo (lo emite Expo en la app). */
+export class PushTokenDto {
+  @ApiProperty({ example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]' })
+  @IsString()
+  @IsNotEmpty({ message: 'El token de notificaciones es requerido' })
+  @MaxLength(100)
+  token: string;
+}
+
 /**
  * Edición de usuario. Todo opcional (PartialType de create) más flags que solo
  * un administrador debería tocar.

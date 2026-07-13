@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -132,6 +133,45 @@ export class CreateOrganizationalDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Hora de apertura "HH:MM" (hora Colombia). Null = sin horario.',
+    example: '08:00',
+  })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'La hora de apertura debe tener formato HH:MM',
+  })
+  openTime?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Hora de cierre "HH:MM". Menor que openTime = horario nocturno.',
+    example: '22:00',
+  })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'La hora de cierre debe tener formato HH:MM',
+  })
+  closeTime?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Días que abre (números 0–6, 0=domingo) separados por coma.',
+    example: '1,2,3,4,5,6',
+  })
+  @IsOptional()
+  @Matches(/^[0-6](,[0-6]){0,6}$/, {
+    message: 'Los días de apertura no son válidos',
+  })
+  openDays?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Cerrado temporalmente (candado manual del negocio).',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  temporarilyClosed?: boolean;
 }
 
 export class UpdateOrganizationalDto extends PartialType(

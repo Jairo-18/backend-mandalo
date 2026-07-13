@@ -29,11 +29,13 @@ import {
   BecomeDeliveryDto,
   ChangeMyPasswordDto,
   CreateUserDto,
+  PushTokenDto,
   RegisterUserDto,
   ResendVerificationDto,
   UpdateMyProfileDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
+import { PushService } from '../../shared/services/push.service';
 import { GetUser } from '../../shared/decorators/user.decorator';
 import { User } from '../../shared/entities/user.entity';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
@@ -64,6 +66,7 @@ export class UserController {
   constructor(
     private readonly _userUC: UserUC,
     private readonly _mailTemplateService: MailTemplateService,
+    private readonly _pushService: PushService,
   ) {}
 
   /**
@@ -277,6 +280,38 @@ export class UserController {
       statusCode: HttpStatus.OK,
       message: 'Foto de perfil actualizada',
       data,
+    };
+  }
+
+  /**
+   * Registro del token de notificaciones push del dispositivo (lo manda la
+   * app al iniciar sesión). Un usuario puede tener varios dispositivos.
+   */
+  @Post('me/push-token')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async registerPushToken(
+    @GetUser() user: User,
+    @Body() body: PushTokenDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._pushService.register(user.id, body.token);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Notificaciones activadas en este dispositivo',
+    };
+  }
+
+  /** El logout del dispositivo retira su token (deja de recibir push). */
+  @Delete('me/push-token')
+  @UseGuards(AuthGuard())
+  async unregisterPushToken(
+    @GetUser() user: User,
+    @Body() body: PushTokenDto,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._pushService.unregister(user.id, body.token);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Notificaciones desactivadas en este dispositivo',
     };
   }
 

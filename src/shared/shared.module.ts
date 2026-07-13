@@ -6,6 +6,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { MailsService } from './services/mails.service';
 import { MailTemplateService } from './services/mail-template.service';
+import { PushService } from './services/push.service';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from './entities/user.entity';
 import { AccessSessions } from './entities/accessSessions.entity';
@@ -22,6 +23,7 @@ import { Product } from './entities/product.entity';
 import { UserAddress } from './entities/userAddress.entity';
 import { Invoice } from './entities/invoice.entity';
 import { InvoiceDetail } from './entities/invoiceDetail.entity';
+import { UserPushToken } from './entities/userPushToken.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
@@ -37,6 +39,7 @@ import { ProductRepository } from './repositories/product.repository';
 import { UserAddressRepository } from './repositories/userAddress.repository';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { InvoiceDetailRepository } from './repositories/invoiceDetail.repository';
+import { UserPushTokenRepository } from './repositories/userPushToken.repository';
 
 @Module({})
 export class SharedModule {
@@ -99,6 +102,7 @@ export class SharedModule {
           UserAddress,
           Invoice,
           InvoiceDetail,
+          UserPushToken,
         ]),
 
         PassportModule,
@@ -136,6 +140,7 @@ export class SharedModule {
         RolesGuard,
         MailsService,
         MailTemplateService,
+        PushService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -151,6 +156,7 @@ export class SharedModule {
         UserAddressRepository,
         InvoiceRepository,
         InvoiceDetailRepository,
+        UserPushTokenRepository,
       ],
       exports: [
         JwtModule,
@@ -158,6 +164,7 @@ export class SharedModule {
         RolesGuard,
         MailsService,
         MailTemplateService,
+        PushService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -173,6 +180,7 @@ export class SharedModule {
         UserAddressRepository,
         InvoiceRepository,
         InvoiceDetailRepository,
+        UserPushTokenRepository,
       ],
     };
   }

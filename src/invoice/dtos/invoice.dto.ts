@@ -104,6 +104,18 @@ export class UpdateInvoiceStateDto {
   @Min(5)
   @Max(180)
   prepEstimatedMinutes?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Código de verificación físico: al DESPACHAR el negocio digita el ' +
+      'código de recogida que le dicta el repartidor; al ENTREGAR el ' +
+      'repartidor digita el código de entrega que le dicta el cliente.',
+    example: '4831',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4)
+  verificationCode?: string;
 }
 
 /** Parámetros del listado paginado; filtro opcional por estados (coma-separados). */

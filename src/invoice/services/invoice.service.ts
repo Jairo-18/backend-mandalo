@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, In } from 'typeorm';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
@@ -22,6 +23,8 @@ import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
+import { isBusinessOpen } from '../../shared/utils/business-hours.util';
+import { PushService } from '../../shared/services/push.service';
 import {
   CreateInvoiceDto,
   PaginatedInvoicesParamsDto,
@@ -71,6 +74,7 @@ export class InvoiceService {
     private readonly _configService: ConfigService,
     private readonly _dataSource: DataSource,
     private readonly _gateway: InvoiceGateway,
+    private readonly _pushService: PushService,
   ) {}
 
   /** Tarifa fija del domicilio vigente (para mostrarla en el checkout). */
@@ -87,6 +91,15 @@ export class InvoiceService {
     });
     if (!organizational || !organizational.isActive) {
       throw new BadRequestException('El negocio no está disponible.');
+    }
+
+    // Un negocio cerrado no recibe pedidos (nadie los prepararía).
+    if (!isBusinessOpen(organizational)) {
+      throw new BadRequestException(
+        organizational.temporarilyClosed
+          ? 'El negocio está cerrado temporalmente. Intenta más tarde.'
+          : 'El negocio está cerrado en este momento. Podrás pedir dentro de su horario de atención.',
+      );
     }
 
     // Dirección: debe ser del propio usuario (se copia como snapshot).
@@ -161,6 +174,10 @@ export class InvoiceService {
         deliveryFee,
         total,
         notes: dto.notes ?? null,
+        // Códigos del flujo físico: recogida (repartidor → negocio) y
+        // entrega (cliente → repartidor).
+        pickupCode: this.randomCode(),
+        deliveryCode: this.randomCode(),
       });
       const savedInvoice = await manager.save(invoice);
       for (const detail of details) detail.invoiceId = savedInvoice.id;
@@ -169,9 +186,19 @@ export class InvoiceService {
     });
 
     const full = await this.findByIdWithRelations(saved.id);
-    // El negocio ve el pedido entrante en vivo.
-    this._gateway.emitToOrg(organizational.id, 'invoice:created', full);
-    return full;
+    // El negocio ve el pedido entrante en vivo (sin códigos: no los necesita).
+    this._gateway.emitToOrg(organizational.id, 'invoice:created', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+    });
+    // Push al dueño (el socket solo sirve con la app abierta).
+    void this._pushService.sendToUsers([organizational.legalPersonId], {
+      title: '¡Nuevo pedido! 🛍️',
+      body: `Pedido #${full.id} por ${this.formatCop(full.total)}. Ábrelo para aceptarlo.`,
+      data: { type: 'order', invoiceId: full.id },
+    });
+    return this.hideCodesFor(user, full);
   }
 
   // ---------- lectura (scoped por rol) ----------
@@ -180,7 +207,7 @@ export class InvoiceService {
     const invoice = await this.findByIdWithRelations(id);
     if (!invoice) throw new NotFoundException('Pedido no encontrado');
     await this.assertCanView(user, invoice);
-    return invoice;
+    return this.hideCodesFor(user, invoice);
   }
 
   async paginatedList(
@@ -225,8 +252,9 @@ export class InvoiceService {
     }
 
     const [entities, itemCount] = await query.getManyAndCount();
+    const sanitized = entities.map((e) => this.hideCodesFor(user, e));
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
-    return new ResponsePaginationDto(entities, pagination);
+    return new ResponsePaginationDto(sanitized, pagination);
   }
 
   /**
@@ -283,6 +311,12 @@ export class InvoiceService {
 
     const [entities, itemCount] = await query.getManyAndCount();
 
+    // Disponibles: los leen TODOS los repartidores — sin códigos.
+    for (const entity of entities) {
+      entity.pickupCode = null;
+      entity.deliveryCode = null;
+    }
+
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
     return new ResponsePaginationDto(entities, pagination);
   }
@@ -315,10 +349,22 @@ export class InvoiceService {
 
     const full = await this.findByIdWithRelations(id);
     // El cliente y el negocio ven que ya hay repartidor; se retira de la lista.
-    this._gateway.emitToUser(full.userId, 'invoice:updated', full);
-    this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', full);
+    this._gateway.emitToUser(full.userId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+    });
+    this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+    });
     this._gateway.emitToDeliveries('invoice:taken', { id });
-    return full;
+    void this._pushService.sendToUsers([full.userId], {
+      title: `Pedido #${full.id}`,
+      body: 'Un repartidor tomó tu pedido. Pronto saldrá en camino.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+    return this.hideCodesFor(user, full);
   }
 
   // ---------- cambio de estado (máquina de estados) ----------
@@ -355,6 +401,36 @@ export class InvoiceService {
       );
     }
 
+    // Verificación física de la recogida: el repartidor dicta SU código y el
+    // negocio lo digita — prueba que la comida quedó en manos del asignado.
+    if (target === StateTypeCode.ON_ROUTE && invoice.pickupCode) {
+      if (!dto.verificationCode) {
+        throw new BadRequestException(
+          'Pídele al repartidor su código de recogida para despachar el pedido.',
+        );
+      }
+      if (dto.verificationCode !== invoice.pickupCode) {
+        throw new BadRequestException(
+          'Código de recogida incorrecto. Verifícalo con el repartidor.',
+        );
+      }
+    }
+
+    // Verificación física de la entrega: el cliente dicta SU código y el
+    // repartidor lo digita — prueba que el pedido llegó a la puerta correcta.
+    if (target === StateTypeCode.DELIVERED && invoice.deliveryCode) {
+      if (!dto.verificationCode) {
+        throw new BadRequestException(
+          'Pídele al cliente su código de entrega para confirmar la entrega.',
+        );
+      }
+      if (dto.verificationCode !== invoice.deliveryCode) {
+        throw new BadRequestException(
+          'Código de entrega incorrecto. Verifícalo con el cliente.',
+        );
+      }
+    }
+
     if (target === StateTypeCode.CANCELLED && !dto.cancellationReason) {
       throw new BadRequestException(
         'Debes indicar el motivo de la cancelación.',
@@ -379,10 +455,39 @@ export class InvoiceService {
 
     const full = await this.findByIdWithRelations(id);
     this.broadcastStateChange(full, target);
-    return full;
+    this.pushStateChange(full, target, roleCode);
+    return this.hideCodesFor(user, full);
   }
 
   // ---------- helpers ----------
+
+  /** Código de verificación de 4 dígitos ("0000"–"9999"). */
+  private randomCode(): string {
+    return randomInt(0, 10000).toString().padStart(4, '0');
+  }
+
+  /**
+   * Cada rol solo ve SU código: el CLIENTE dueño el de entrega y el
+   * REPARTIDOR asignado el de recogida. El de entrega jamás le llega a un
+   * repartidor (es el candado contra entregas falsas); el negocio no ve
+   * ninguno (digita el que le dictan). Admin ve ambos (soporte). Devuelve una
+   * copia para no ensuciar el objeto que usan los broadcasts.
+   */
+  private hideCodesFor(user: User, invoice: Invoice): Invoice {
+    const role = user.roleType?.code;
+    if (role === RoleTypeCode.ADMIN) return invoice;
+    const copy = Object.assign(
+      Object.create(Object.getPrototypeOf(invoice) as object),
+      invoice,
+    ) as Invoice;
+    if (role !== RoleTypeCode.CLIENT || invoice.userId !== user.id) {
+      copy.deliveryCode = null;
+    }
+    if (role !== RoleTypeCode.DELIVERY || invoice.deliveryUserId !== user.id) {
+      copy.pickupCode = null;
+    }
+    return copy;
+  }
 
   /**
    * Sella el timestamp de la transición y guarda los estimados: al ACEPTAR,
@@ -461,20 +566,118 @@ export class InvoiceService {
   }
 
   private broadcastStateChange(invoice: Invoice, target: StateTypeCode): void {
-    // Cliente y negocio siempre quieren saber.
-    this._gateway.emitToUser(invoice.userId, 'invoice:updated', invoice);
-    this._gateway.emitToOrg(invoice.organizationalId, 'invoice:updated', invoice);
+    // Cliente y negocio siempre quieren saber. Cada rol recibe solo SU
+    // código (el de entrega JAMÁS viaja hacia repartidores).
+    this._gateway.emitToUser(invoice.userId, 'invoice:updated', {
+      ...invoice,
+      pickupCode: null,
+    });
+    this._gateway.emitToOrg(invoice.organizationalId, 'invoice:updated', {
+      ...invoice,
+      pickupCode: null,
+      deliveryCode: null,
+    });
     if (invoice.deliveryUserId) {
-      this._gateway.emitToDelivery(
-        invoice.deliveryUserId,
-        'invoice:updated',
-        invoice,
-      );
+      this._gateway.emitToDelivery(invoice.deliveryUserId, 'invoice:updated', {
+        ...invoice,
+        deliveryCode: null,
+      });
     }
     // Al pasar a PREP entra a la lista de disponibles de los repartidores.
     if (target === StateTypeCode.PREPARING) {
-      this._gateway.emitToDeliveries('invoice:available', invoice);
+      this._gateway.emitToDeliveries('invoice:available', {
+        ...invoice,
+        pickupCode: null,
+        deliveryCode: null,
+      });
     }
+  }
+
+  /**
+   * Push del cambio de estado a quien NO lo provocó (el socket cubre la app
+   * abierta; el push cubre la app cerrada). Fire-and-forget: PushService ya
+   * captura sus errores.
+   */
+  private pushStateChange(
+    invoice: Invoice,
+    target: StateTypeCode,
+    actorRole?: RoleTypeCode,
+  ): void {
+    const num = `#${invoice.id}`;
+    const orgName =
+      invoice.organizational?.tradeName ||
+      invoice.organizational?.legalName ||
+      'El negocio';
+    const data = { type: 'order', invoiceId: invoice.id };
+
+    switch (target) {
+      case StateTypeCode.ACCEPTED:
+        void this._pushService.sendToUsers([invoice.userId], {
+          title: `Pedido ${num} aceptado ✅`,
+          body: invoice.prepEstimatedMinutes
+            ? `${orgName} aceptó tu pedido. Estará listo en ~${invoice.prepEstimatedMinutes} min.`
+            : `${orgName} aceptó tu pedido.`,
+          data,
+        });
+        break;
+      case StateTypeCode.PREPARING:
+        void this._pushService.sendToUsers([invoice.userId], {
+          title: `Pedido ${num} en preparación 🍳`,
+          body: `${orgName} está preparando tu pedido.`,
+          data,
+        });
+        // Entra a la lista de disponibles: avisar a los repartidores.
+        void this._pushService.sendToActiveDeliveries({
+          title: 'Pedido disponible para entregar 🛵',
+          body: `${orgName} tiene el pedido ${num} listo para recoger.`,
+          data,
+        });
+        break;
+      case StateTypeCode.ON_ROUTE:
+        void this._pushService.sendToUsers([invoice.userId], {
+          title: `¡Tu pedido ${num} va en camino! 🛵`,
+          body: 'El repartidor va hacia tu dirección. Ten a mano tu código de entrega.',
+          data,
+        });
+        break;
+      case StateTypeCode.DELIVERED:
+        void this._pushService.sendToUsers([invoice.userId], {
+          title: `Pedido ${num} entregado 🎉`,
+          body: '¡Gracias por pedir en Mándalo!',
+          data,
+        });
+        break;
+      case StateTypeCode.CANCELLED:
+        if (actorRole === RoleTypeCode.CLIENT) {
+          // El cliente canceló: avisar al negocio.
+          void this._pushService.sendToUsers(
+            [invoice.organizational?.legalPersonId],
+            {
+              title: `Pedido ${num} cancelado`,
+              body: 'El cliente canceló el pedido.',
+              data,
+            },
+          );
+        } else {
+          // El negocio canceló: avisar al cliente (y al repartidor si ya había).
+          void this._pushService.sendToUsers(
+            [invoice.userId, invoice.deliveryUserId],
+            {
+              title: `Pedido ${num} cancelado`,
+              body: invoice.cancellationReason
+                ? `Motivo: ${invoice.cancellationReason}`
+                : 'El negocio canceló el pedido.',
+              data,
+            },
+          );
+        }
+        break;
+    }
+  }
+
+  /** "$ 44.400" — formato COP corto para el cuerpo de las notificaciones. */
+  private formatCop(value: number): string {
+    return `$ ${Math.round(value).toLocaleString('es-CO')}`;
   }
 
   private async findByIdWithRelations(id: number): Promise<Invoice> {

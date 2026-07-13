@@ -112,6 +112,17 @@ export class Invoice {
   @Column('varchar', { length: 255, nullable: true })
   cancellationReason?: string;
 
+  // ---- Códigos de verificación del flujo físico ----
+  // Recogida: lo ve el REPARTIDOR en su app y se lo dicta al negocio, que lo
+  // digita al despachar (valida que la comida se entregó al repartidor real).
+  @Column('varchar', { length: 4, nullable: true })
+  pickupCode?: string | null;
+
+  // Entrega: lo ve el CLIENTE en su app y se lo dicta al repartidor, que lo
+  // digita al marcar entregado. NUNCA debe llegarle al repartidor por API.
+  @Column('varchar', { length: 4, nullable: true })
+  deliveryCode?: string | null;
+
   // ---- Tiempos del flujo: cuándo ocurrió cada transición ----
   // timestamptz (instante absoluto): createdAt lo escribe Postgres y las
   // transiciones Node — con `timestamp` a secas se mezclaban los relojes.

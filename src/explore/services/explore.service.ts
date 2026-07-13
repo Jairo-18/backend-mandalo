@@ -15,6 +15,10 @@ import {
   PaginatedExploreOrganizationalsParamsDto,
   PaginatedExploreProductsParamsDto,
 } from '../dtos/explore.dto';
+import { isBusinessOpen } from '../../shared/utils/business-hours.util';
+
+/** Negocio público + bandera calculada de apertura (horario Colombia). */
+type PublicOrganizational = Partial<Organizational> & { isOpen: boolean };
 
 /**
  * Vista del CLIENTE (rol USER): explorar negocios y sus productos.
@@ -210,11 +214,16 @@ export class ExploreService {
       .leftJoinAndSelect('product.categoryType', 'categoryType')
       .innerJoin('product.organizational', 'organizational')
       // Solo lo que la card necesita del negocio (nada de NIT/dueño).
+      // Las columnas de horario van para calcular isOpen en el mapper.
       .addSelect([
         'organizational.id',
         'organizational.legalName',
         'organizational.tradeName',
         'organizational.logoUrl',
+        'organizational.openTime',
+        'organizational.closeTime',
+        'organizational.openDays',
+        'organizational.temporarilyClosed',
       ])
       .where('product.isActive = true')
       .andWhere('organizational.isActive = true')
@@ -241,6 +250,14 @@ export class ExploreService {
     this.applyNearFilter(query, params.lat, params.lng);
 
     const [entities, itemCount] = await query.getManyAndCount();
+    // El cliente decide en la card si puede agregar al carrito: cada producto
+    // lleva la bandera de apertura de SU negocio.
+    for (const product of entities) {
+      if (product.organizational) {
+        (product.organizational as Organizational & { isOpen: boolean }).isOpen =
+          isBusinessOpen(product.organizational);
+      }
+    }
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
 
     return new ResponsePaginationDto(entities, pagination);
@@ -297,7 +314,7 @@ export class ExploreService {
   /** Campos del negocio que ve el cliente (sin NIT, dueño ni metadatos de admin). */
   private toPublicOrganizational(
     organizational: Organizational,
-  ): Partial<Organizational> {
+  ): PublicOrganizational {
     return {
       id: organizational.id,
       legalName: organizational.legalName,
@@ -310,6 +327,11 @@ export class ExploreService {
       longitude: organizational.longitude,
       municipality: organizational.municipality,
       tags: organizational.tags,
+      openTime: organizational.openTime,
+      closeTime: organizational.closeTime,
+      openDays: organizational.openDays,
+      temporarilyClosed: organizational.temporarilyClosed,
+      isOpen: isBusinessOpen(organizational),
     };
   }
 }

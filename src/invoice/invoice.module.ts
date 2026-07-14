@@ -9,6 +9,7 @@ import { InvoiceGateway } from './invoice.gateway';
   imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
   controllers: [InvoiceController],
   providers: [InvoiceService, InvoiceUC, InvoiceGateway],
-  exports: [InvoiceService],
+  // El gateway lo reusa el módulo de chat (mismo socket /orders).
+  exports: [InvoiceService, InvoiceGateway],
 })
 export class InvoiceModule {}

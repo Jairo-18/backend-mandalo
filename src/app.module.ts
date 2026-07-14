@@ -22,6 +22,7 @@ import { ProductModule } from './product/product.module';
 import { UserAddressModule } from './userAddress/userAddress.module';
 import { ExploreModule } from './explore/explore.module';
 import { InvoiceModule } from './invoice/invoice.module';
+import { ChatModule } from './chat/chat.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -84,6 +85,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     UserAddressModule,
     ExploreModule,
     InvoiceModule,
+    ChatModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

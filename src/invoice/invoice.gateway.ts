@@ -161,6 +161,20 @@ export class InvoiceGateway
     this.emitToOrg(auth.organizationalId, 'delivery:position', payload);
   }
 
+  /**
+   * ¿Hay algún socket escuchando esta room? Lo usa el chat para mandar push
+   * SOLO cuando el destinatario no está conectado (evita la doble
+   * notificación con la app abierta). Con una instancia el adapter es local.
+   */
+  hasListeners(room: string): boolean {
+    const adapter = (
+      this.server as unknown as {
+        adapter?: { rooms?: Map<string, Set<string>> };
+      }
+    ).adapter;
+    return !!adapter?.rooms?.get(room)?.size;
+  }
+
   // ---------- emisores (los usa el service) ----------
 
   emitToUser(userId: string, event: string, payload: unknown): void {

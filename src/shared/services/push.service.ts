@@ -123,7 +123,9 @@ export class PushService {
       body: notification.body,
       data: notification.data,
       priority: 'high',
-      channelId: 'orders',
+      // 'orders-v2': el canal 'orders' quedó mudo en los teléfonos que lo
+      // crearon con el bug de sound (los canales Android son inmutables).
+      channelId: 'orders-v2',
     }));
 
     for (const chunk of this.expo.chunkPushNotifications(messages)) {

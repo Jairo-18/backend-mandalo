@@ -87,7 +87,9 @@ export class PushService {
     try {
       const tokens = await this._pushTokenRepository
         .createQueryBuilder('pushToken')
-        .innerJoin('user', 'u', 'u."id" = pushToken."userId"')
+        // Alias con comillas: sin ellas Postgres lo baja a "pushtoken" y el
+        // JOIN revienta con missing FROM-clause entry.
+        .innerJoin('user', 'u', 'u."id" = "pushToken"."userId"')
         .innerJoin(
           'roleType',
           'rt',

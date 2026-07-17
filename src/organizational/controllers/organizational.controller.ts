@@ -43,6 +43,7 @@ import {
   GetPaginatedOrganizationalsDocs,
   UpdateOrganizationalDocs,
   UploadLogoDocs,
+  UploadPaymentQrDocs,
 } from '../decorators/organizational.decorators';
 
 // El CRUD es del panel ADMIN (@Roles por ruta); los endpoints `mine/*` son
@@ -123,6 +124,22 @@ export class OrganizationalController {
     };
   }
 
+  /** Sube/reemplaza el QR de Bancolombia del negocio propio (rol NEGO). */
+  @Post('mine/payment-qr')
+  @UploadPaymentQrDocs()
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadMyPaymentQr(
+    @GetUser() user: User,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._organizationalUC.updateMyPaymentQr(user.id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'QR de pago actualizado exitosamente',
+      data,
+    };
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
@@ -178,6 +195,24 @@ export class OrganizationalController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Logo actualizado exitosamente',
+      data,
+    };
+  }
+
+  /** Sube/reemplaza el QR de Bancolombia del negocio (admin). */
+  @Post(':id/payment-qr')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @UploadPaymentQrDocs()
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadPaymentQr(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._organizationalUC.updatePaymentQr(id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'QR de pago actualizado exitosamente',
       data,
     };
   }

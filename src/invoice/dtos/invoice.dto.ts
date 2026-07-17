@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -142,4 +143,36 @@ export class PaginatedInvoicesParamsDto extends ParamsPaginationDto {
   @Type(() => Number)
   @IsNumber()
   lng?: number;
+
+  // ---- Filtros exclusivos del ADMIN (los demás roles ya van scoped) ----
+  @ApiPropertyOptional({
+    description: 'Solo ADMIN: pedidos de un negocio puntual',
+    example: 3,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  organizationalId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Solo ADMIN: entregados desde esta fecha local (YYYY-MM-DD, inclusive)',
+    example: '2026-07-01',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'deliveredFrom debe tener formato YYYY-MM-DD',
+  })
+  deliveredFrom?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Solo ADMIN: entregados hasta esta fecha local (YYYY-MM-DD, inclusive)',
+    example: '2026-07-31',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'deliveredTo debe tener formato YYYY-MM-DD',
+  })
+  deliveredTo?: string;
 }

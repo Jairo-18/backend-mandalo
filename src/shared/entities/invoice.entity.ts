@@ -112,6 +112,11 @@ export class Invoice {
   @Column('varchar', { length: 255, nullable: true })
   cancellationReason?: string;
 
+  // Soporte de pago (foto/pantallazo de la transferencia) que sube el
+  // CLIENTE cuando el método no es efectivo; el negocio lo ve para verificar.
+  @Column('varchar', { length: 500, nullable: true })
+  paymentProofUrl?: string | null;
+
   // ---- Códigos de verificación del flujo físico ----
   // Recogida: lo ve el REPARTIDOR en su app y se lo dicta al negocio, que lo
   // digita al despachar (valida que la comida se entregó al repartidor real).

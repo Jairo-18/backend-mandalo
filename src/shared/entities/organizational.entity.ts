@@ -110,6 +110,25 @@ export class Organizational {
   @Column('boolean', { default: false })
   temporarilyClosed: boolean;
 
+  // ---- Datos de pago (métodos distintos a efectivo) ----
+  // El cliente los ve en el checkout para transferir y subir el soporte.
+  // Titular: a nombre de quién le va a transferir el cliente.
+  @Column('varchar', { length: 120, nullable: true })
+  paymentHolderName?: string | null;
+
+  @Column('varchar', { length: 30, nullable: true })
+  nequiNumber?: string | null;
+
+  @Column('varchar', { length: 80, nullable: true })
+  nequiKey?: string | null;
+
+  @Column('varchar', { length: 60, nullable: true })
+  bancolombiaAccount?: string | null;
+
+  // Imagen del QR de Bancolombia que sube el negocio (upload, no texto).
+  @Column('varchar', { length: 500, nullable: true })
+  bancolombiaQrUrl?: string | null;
+
   @Column('boolean', { default: true })
   isActive: boolean;
 

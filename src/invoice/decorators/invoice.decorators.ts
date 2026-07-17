@@ -1,6 +1,8 @@
 import { applyDecorators } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -60,6 +62,27 @@ export function ChangeInvoiceStateDocs() {
     ApiBearerAuth(),
     ApiOperation({
       summary: 'Cambiar el estado del pedido (aceptar, preparar, en ruta, entregar, cancelar)',
+    }),
+    ApiOkResponse({ type: UpdateRecordResponseDto }),
+  );
+}
+
+export function UploadPaymentProofDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary:
+        'Subir/reemplazar el soporte de pago del pedido (cliente dueño, métodos distintos a efectivo)',
+    }),
+    ApiConsumes('multipart/form-data'),
+    ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', format: 'binary' },
+        },
+        required: ['file'],
+      },
     }),
     ApiOkResponse({ type: UpdateRecordResponseDto }),
   );

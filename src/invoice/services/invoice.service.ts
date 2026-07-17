@@ -23,8 +23,10 @@ import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
+import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { isBusinessOpen } from '../../shared/utils/business-hours.util';
 import { PushService } from '../../shared/services/push.service';
+import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import {
   CreateInvoiceDto,
   PaginatedInvoicesParamsDto,
@@ -75,6 +77,7 @@ export class InvoiceService {
     private readonly _dataSource: DataSource,
     private readonly _gateway: InvoiceGateway,
     private readonly _pushService: PushService,
+    private readonly _localStorageService: LocalStorageService,
   ) {}
 
   /** Tarifa fija del domicilio vigente (para mostrarla en el checkout). */
@@ -238,8 +241,27 @@ export class InvoiceService {
       query.andWhere('invoice.organizationalId = :oid', { oid: org.id });
     } else if (roleCode === RoleTypeCode.DELIVERY) {
       query.andWhere('invoice.deliveryUserId = :did', { did: user.id });
+    } else if (roleCode === RoleTypeCode.ADMIN) {
+      // ADMIN ve todos; filtros opcionales para los cobros por período
+      // (negocio puntual + rango de fechas de ENTREGA en hora local).
+      if (params.organizationalId) {
+        query.andWhere('invoice.organizationalId = :adminOid', {
+          adminOid: params.organizationalId,
+        });
+      }
+      if (params.deliveredFrom) {
+        query.andWhere(
+          `(invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}')::date >= :dfrom`,
+          { dfrom: params.deliveredFrom },
+        );
+      }
+      if (params.deliveredTo) {
+        query.andWhere(
+          `(invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}')::date <= :dto`,
+          { dto: params.deliveredTo },
+        );
+      }
     }
-    // ADMIN: sin filtro (ve todos).
 
     if (params.stateCodes) {
       const codes = params.stateCodes
@@ -365,6 +387,70 @@ export class InvoiceService {
       data: { type: 'order', invoiceId: full.id },
     });
     return this.hideCodesFor(user, full);
+  }
+
+  // ---------- soporte de pago (cliente, métodos distintos a efectivo) ----------
+
+  /**
+   * El CLIENTE dueño sube la foto/pantallazo del pago (transferencia, Nequi,
+   * Daviplata…) para que el negocio verifique. Reemplaza el anterior si
+   * vuelve a subir. El pago en efectivo no lleva soporte.
+   */
+  async uploadPaymentProof(
+    user: User,
+    id: number,
+    file: Express.Multer.File,
+  ): Promise<{ paymentProofUrl: string }> {
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+    if (
+      user.roleType?.code !== RoleTypeCode.CLIENT ||
+      invoice.userId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'Solo el dueño del pedido puede subir el soporte de pago.',
+      );
+    }
+    // 'EFEC' = efectivo (contra-entrega en billetes): no hay nada que probar.
+    if (invoice.paidType?.code === 'EFEC') {
+      throw new BadRequestException(
+        'El pago en efectivo no necesita soporte.',
+      );
+    }
+    if (invoice.stateType?.code === StateTypeCode.CANCELLED) {
+      throw new BadRequestException(
+        'El pedido está cancelado — no se puede adjuntar el soporte.',
+      );
+    }
+    if (!file) {
+      throw new BadRequestException('Adjunta la imagen del soporte de pago.');
+    }
+
+    const previous = this._localStorageService.publicIdFromUrl(
+      invoice.paymentProofUrl,
+    );
+    const { imageUrl } = await this._localStorageService.saveImage(
+      file,
+      'payments',
+    );
+    invoice.paymentProofUrl = imageUrl;
+    await this._invoiceRepository.save(invoice);
+    if (previous) await this._localStorageService.deleteImage(previous);
+
+    // El negocio se entera al instante (socket con la app abierta + push).
+    const full = await this.findByIdWithRelations(id);
+    this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+    });
+    void this._pushService.sendToUsers([full.organizational?.legalPersonId], {
+      title: `Pedido #${full.id} — soporte de pago 💳`,
+      body: 'El cliente subió el comprobante del pago. Ábrelo para verificarlo.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+
+    return { paymentProofUrl: imageUrl };
   }
 
   // ---------- cambio de estado (máquina de estados) ----------

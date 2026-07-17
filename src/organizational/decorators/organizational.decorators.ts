@@ -89,3 +89,23 @@ export function UploadLogoDocs() {
     ApiOkResponse(),
   );
 }
+
+export function UploadPaymentQrDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary: 'Subir/reemplazar el QR de Bancolombia del negocio',
+    }),
+    ApiConsumes('multipart/form-data'),
+    ApiBody({
+      schema: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', format: 'binary' },
+        },
+        required: ['file'],
+      },
+    }),
+    ApiOkResponse({ type: UpdateRecordResponseDto }),
+  );
+}

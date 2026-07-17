@@ -332,6 +332,13 @@ export class ExploreService {
       openDays: organizational.openDays,
       temporarilyClosed: organizational.temporarilyClosed,
       isOpen: isBusinessOpen(organizational),
+      // Datos de pago: el checkout los muestra cuando el método no es
+      // efectivo (a dónde transferir + a nombre de quién).
+      paymentHolderName: organizational.paymentHolderName,
+      nequiNumber: organizational.nequiNumber,
+      nequiKey: organizational.nequiKey,
+      bancolombiaAccount: organizational.bancolombiaAccount,
+      bancolombiaQrUrl: organizational.bancolombiaQrUrl,
     };
   }
 }

@@ -559,6 +559,18 @@ export class UserService {
       // findOne carga la relación; se limpia para que no pise el id nuevo.
       user.roleType = undefined;
     }
+    if (rest.municipalityId && rest.municipalityId !== user.municipalityId) {
+      user.municipality = undefined;
+    }
+    if (rest.departmentId && rest.departmentId !== user.departmentId) {
+      user.department = undefined;
+    }
+    if (
+      rest.identificationTypeId &&
+      rest.identificationTypeId !== user.identificationTypeId
+    ) {
+      user.identificationType = undefined;
+    }
 
     Object.assign(user, rest);
     if (password) {

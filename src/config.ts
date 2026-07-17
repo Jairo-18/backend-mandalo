@@ -28,6 +28,13 @@ export const config = async () => {
       // pedidos disponibles que ve el repartidor.
       nearbyRadiusKm:
         parseFloat(process.env.APP_NEARBY_RADIUS_KM as string) || 10,
+      // Comisión de la plataforma al NEGOCIO (toda la plata se trata con él;
+      // al repartidor no se le cobra): % sobre lo vendido (subtotal) y %
+      // sobre los domicilios de los pedidos entregados.
+      commissionOrderRate:
+        parseFloat(process.env.APP_COMMISSION_ORDER_RATE as string) || 5,
+      commissionDeliveryRate:
+        parseFloat(process.env.APP_COMMISSION_DELIVERY_RATE as string) || 20,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

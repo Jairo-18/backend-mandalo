@@ -25,6 +25,7 @@ import { Invoice } from './entities/invoice.entity';
 import { InvoiceDetail } from './entities/invoiceDetail.entity';
 import { UserPushToken } from './entities/userPushToken.entity';
 import { ChatMessage } from './entities/chatMessage.entity';
+import { BusinessSettlement } from './entities/businessSettlement.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
@@ -42,6 +43,7 @@ import { InvoiceRepository } from './repositories/invoice.repository';
 import { InvoiceDetailRepository } from './repositories/invoiceDetail.repository';
 import { UserPushTokenRepository } from './repositories/userPushToken.repository';
 import { ChatMessageRepository } from './repositories/chatMessage.repository';
+import { BusinessSettlementRepository } from './repositories/businessSettlement.repository';
 
 @Module({})
 export class SharedModule {
@@ -106,6 +108,7 @@ export class SharedModule {
           InvoiceDetail,
           UserPushToken,
           ChatMessage,
+          BusinessSettlement,
         ]),
 
         PassportModule,
@@ -161,6 +164,7 @@ export class SharedModule {
         InvoiceDetailRepository,
         UserPushTokenRepository,
         ChatMessageRepository,
+        BusinessSettlementRepository,
       ],
       exports: [
         JwtModule,
@@ -186,6 +190,7 @@ export class SharedModule {
         InvoiceDetailRepository,
         UserPushTokenRepository,
         ChatMessageRepository,
+        BusinessSettlementRepository,
       ],
     };
   }

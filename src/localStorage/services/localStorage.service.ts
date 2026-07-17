@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 
 /** Subcarpetas lógicas de /uploads (una por tipo de imagen). */
-export type UploadFolder = 'users' | 'organizational' | 'products';
+export type UploadFolder = 'users' | 'organizational' | 'products' | 'payments';
 
 /**
  * Almacenamiento de imágenes en el disco del servidor (copiado de samawe).

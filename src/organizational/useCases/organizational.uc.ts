@@ -47,4 +47,12 @@ export class OrganizationalUC {
   updateLogo(id: number, file: Express.Multer.File) {
     return this._organizationalService.updateLogo(id, file);
   }
+
+  updatePaymentQr(id: number, file: Express.Multer.File) {
+    return this._organizationalService.updatePaymentQr(id, file);
+  }
+
+  updateMyPaymentQr(userId: string, file: Express.Multer.File) {
+    return this._organizationalService.updateMyPaymentQr(userId, file);
+  }
 }

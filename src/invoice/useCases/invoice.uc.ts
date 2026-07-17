@@ -38,4 +38,8 @@ export class InvoiceUC {
   changeState(user: User, id: number, dto: UpdateInvoiceStateDto) {
     return this._invoiceService.changeState(user, id, dto);
   }
+
+  uploadPaymentProof(user: User, id: number, file: Express.Multer.File) {
+    return this._invoiceService.uploadPaymentProof(user, id, file);
+  }
 }

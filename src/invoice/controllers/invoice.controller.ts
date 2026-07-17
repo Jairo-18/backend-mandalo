@@ -8,8 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { InvoiceUC } from '../useCases/invoice.uc';
@@ -33,6 +36,7 @@ import {
   GetAvailableInvoicesDocs,
   GetPaginatedInvoicesDocs,
   TakeInvoiceDocs,
+  UploadPaymentProofDocs,
 } from '../decorators/invoice.decorators';
 
 /**
@@ -111,6 +115,26 @@ export class InvoiceController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Tomaste el pedido. ¡En marcha!',
+    };
+  }
+
+  /**
+   * Soporte de pago (métodos distintos a efectivo): el cliente sube la
+   * foto/pantallazo de la transferencia y el negocio la ve en el detalle.
+   */
+  @Post(':id/payment-proof')
+  @UseInterceptors(FileInterceptor('file'))
+  @UploadPaymentProofDocs()
+  async uploadPaymentProof(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._invoiceUC.uploadPaymentProof(user, id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Soporte de pago enviado al negocio',
+      data,
     };
   }
 

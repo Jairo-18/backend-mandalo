@@ -23,6 +23,7 @@ import { UserAddressModule } from './userAddress/userAddress.module';
 import { ExploreModule } from './explore/explore.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ChatModule } from './chat/chat.module';
+import { SettlementModule } from './settlement/settlement.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -86,6 +87,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ExploreModule,
     InvoiceModule,
     ChatModule,
+    SettlementModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

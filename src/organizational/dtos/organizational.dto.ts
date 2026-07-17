@@ -172,6 +172,44 @@ export class CreateOrganizationalDto {
   @IsOptional()
   @IsBoolean()
   temporarilyClosed?: boolean;
+
+  // ---- Datos de pago (el cliente los ve en el checkout si el método no es
+  // efectivo). El QR de Bancolombia va aparte (upload :id/payment-qr). ----
+  @ApiPropertyOptional({
+    description: 'Titular: a nombre de quién transfiere el cliente',
+    example: 'Juan Pérez',
+    maxLength: 120,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  paymentHolderName?: string | null;
+
+  @ApiPropertyOptional({ example: '3001234567', maxLength: 30 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  nequiNumber?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Llave de Nequi (alias/llave Bre-B)',
+    example: '@elsabor',
+    maxLength: 80,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  nequiKey?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Número de cuenta Bancolombia (ahorros/corriente)',
+    example: '123-456789-01',
+    maxLength: 60,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  bancolombiaAccount?: string | null;
 }
 
 export class UpdateOrganizationalDto extends PartialType(

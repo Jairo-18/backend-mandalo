@@ -211,6 +211,15 @@ export class OrganizationalService {
     return this.updateLogo(mine.id, file);
   }
 
+  /** QR de Bancolombia del negocio propio (rol NEGO). */
+  async updateMyPaymentQr(
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<{ bancolombiaQrUrl: string }> {
+    const mine = await this.findMine(userId);
+    return this.updatePaymentQr(mine.id, file);
+  }
+
   async update(
     id: number,
     dto: UpdateOrganizationalDto,
@@ -282,6 +291,34 @@ export class OrganizationalService {
     }
 
     return { logoUrl: imageUrl };
+  }
+
+  /**
+   * Sube/reemplaza la imagen del QR de Bancolombia (mismo flujo que el logo:
+   * guarda la nueva, apunta la columna y borra la anterior del disco).
+   */
+  async updatePaymentQr(
+    id: number,
+    file: Express.Multer.File,
+  ): Promise<{ bancolombiaQrUrl: string }> {
+    const organizational = await this.findOne(id);
+
+    const { imageUrl } = await this._localStorageService.saveImage(
+      file,
+      'organizational',
+    );
+
+    const oldPublicId = this._localStorageService.publicIdFromUrl(
+      organizational.bancolombiaQrUrl,
+    );
+    await this._organizationalRepository.update(id, {
+      bancolombiaQrUrl: imageUrl,
+    });
+    if (oldPublicId) {
+      await this._localStorageService.deleteImage(oldPublicId);
+    }
+
+    return { bancolombiaQrUrl: imageUrl };
   }
 
   // ---------- helpers ----------

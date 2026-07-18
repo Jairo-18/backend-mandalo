@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { PassportModule } from '@nestjs/passport';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -12,6 +12,7 @@ import { ConfigModule } from '@nestjs/config';
 import { config } from './config';
 import { SharedModule } from './shared/shared.module';
 import { ApiKeyGuard } from './shared/guards/api-key.guard';
+import { ClientIpThrottlerGuard } from './shared/guards/client-ip-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { CatalogModule } from './catalog/catalog.module';
@@ -95,7 +96,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: ClientIpThrottlerGuard,
     },
     {
       provide: APP_GUARD,

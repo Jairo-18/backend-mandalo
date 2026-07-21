@@ -3,6 +3,7 @@ import { InvoiceService } from '../services/invoice.service';
 import { User } from '../../shared/entities/user.entity';
 import {
   CreateInvoiceDto,
+  DeliveryFeePreviewParamsDto,
   PaginatedInvoicesParamsDto,
   UpdateInvoiceStateDto,
 } from '../dtos/invoice.dto';
@@ -11,8 +12,8 @@ import {
 export class InvoiceUC {
   constructor(private readonly _invoiceService: InvoiceService) {}
 
-  getDeliveryFee() {
-    return this._invoiceService.getDeliveryFee();
+  previewDeliveryFee(params: DeliveryFeePreviewParamsDto) {
+    return this._invoiceService.previewDeliveryFee(params);
   }
 
   create(user: User, dto: CreateInvoiceDto) {

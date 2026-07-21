@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 const BRAND = {
   name: 'Mándalo',
-  slogan: 'LO PIDES, LO LLEVAMOS.',
+  slogan: 'LO PIDES, LO MANDAMOS.',
   primary: '#FF5A3C',
   dark: '#1E1E2D',
   muted: '#7A7A8A',

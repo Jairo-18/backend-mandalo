@@ -119,6 +119,34 @@ export class UpdateInvoiceStateDto {
   verificationCode?: string;
 }
 
+/**
+ * Preview en vivo de la tarifa del domicilio (checkout, antes de crear el
+ * pedido): negocio + coordenadas de la dirección elegida. Sin coordenadas
+ * (o sin las del negocio) cae a la tarifa fija de respaldo.
+ */
+export class DeliveryFeePreviewParamsDto {
+  @ApiProperty({ description: 'Negocio del pedido', example: 3 })
+  @Type(() => Number)
+  @IsInt()
+  organizationalId: number;
+
+  @ApiPropertyOptional({ description: 'Latitud de la dirección de entrega' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ description: 'Longitud de la dirección de entrega' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+}
+
 /** Parámetros del listado paginado; filtro opcional por estados (coma-separados). */
 export class PaginatedInvoicesParamsDto extends ParamsPaginationDto {
   @ApiPropertyOptional({

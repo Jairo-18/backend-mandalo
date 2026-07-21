@@ -2,23 +2,21 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsEnum,
-  IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { SettlementPeriodType } from '../../shared/constants/settlementPeriodType.enum';
 
 export { SettlementPeriodType };
 
-/** Listado de períodos facturados de un negocio (solo ADMIN). */
-export class SettlementPeriodsParamsDto {
-  @ApiProperty({ description: 'Negocio a liquidar', example: 3 })
-  @Type(() => Number)
-  @IsInt()
-  organizationalId: number;
+/** Listado de períodos liquidados de un repartidor (solo ADMIN). */
+export class DeliverySettlementPeriodsParamsDto {
+  @ApiProperty({ description: 'Repartidor a liquidar' })
+  @IsUUID()
+  deliveryUserId: string;
 
   @ApiProperty({
     enum: SettlementPeriodType,
@@ -28,8 +26,8 @@ export class SettlementPeriodsParamsDto {
   periodType: SettlementPeriodType;
 }
 
-/** "Mis pedidos" del propio negocio (self-scoped por JWT, rol NEGO). */
-export class MySettlementPeriodsParamsDto {
+/** "Mis pedidos" del propio repartidor (self-scoped por JWT). */
+export class MyDeliverySettlementPeriodsParamsDto {
   @ApiProperty({
     enum: SettlementPeriodType,
     description: 'Agrupar por quincena, mes o año (hora Colombia)',
@@ -39,14 +37,13 @@ export class MySettlementPeriodsParamsDto {
 }
 
 /**
- * Marcar/desmarcar un período como COBRADO. El backend recalcula los montos
- * del período y los guarda como snapshot — el cliente nunca manda plata.
+ * Marcar/desmarcar una quincena como PAGADA al repartidor. El backend
+ * recalcula los montos y los guarda como snapshot.
  */
-export class MarkSettlementDto {
-  @ApiProperty({ description: 'Negocio a liquidar', example: 3 })
-  @Type(() => Number)
-  @IsInt()
-  organizationalId: number;
+export class MarkDeliverySettlementDto {
+  @ApiProperty({ description: 'Repartidor a liquidar' })
+  @IsUUID()
+  deliveryUserId: string;
 
   @ApiProperty({ enum: SettlementPeriodType })
   @IsEnum(SettlementPeriodType)
@@ -62,12 +59,12 @@ export class MarkSettlementDto {
   })
   periodStart: string;
 
-  @ApiProperty({ description: 'true = cobrado, false = deshacer el cobro' })
+  @ApiProperty({ description: 'true = pagado, false = deshacer el pago' })
   @IsBoolean()
   isPaid: boolean;
 
   @ApiPropertyOptional({
-    description: 'Nota del cobro ("pagó por Nequi", "quedó debiendo 10k")',
+    description: 'Nota del pago ("pagado por Nequi", "quedó debiendo 10k")',
   })
   @IsOptional()
   @IsString()

@@ -18,6 +18,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { InvoiceUC } from '../useCases/invoice.uc';
 import {
   CreateInvoiceDto,
+  DeliveryFeePreviewParamsDto,
   PaginatedInvoicesParamsDto,
   UpdateInvoiceStateDto,
 } from '../dtos/invoice.dto';
@@ -73,13 +74,12 @@ export class InvoiceController {
     return this._invoiceUC.paginatedList(user, params);
   }
 
-  // Tarifa del domicilio (para el checkout). Antes de :id (literal, no numérico).
+  // Tarifa del domicilio EN VIVO por distancia (checkout). Antes de :id
+  // (literal, no numérico).
   @Get('delivery-fee')
-  deliveryFee() {
-    return {
-      statusCode: HttpStatus.OK,
-      data: { deliveryFee: this._invoiceUC.getDeliveryFee() },
-    };
+  async deliveryFee(@Query() params: DeliveryFeePreviewParamsDto) {
+    const data = await this._invoiceUC.previewDeliveryFee(params);
+    return { statusCode: HttpStatus.OK, data };
   }
 
   // Antes de :id para que "available" no caiga en el ParseIntPipe.

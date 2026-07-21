@@ -20,12 +20,14 @@ import {
   BecomeDeliveryDto,
   CreateUserDto,
   RegisterUserDto,
+  ResendDeliveryDocumentsDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { MailsService } from '../../shared/services/mails.service';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
+import { CURRENT_TERMS_VERSION } from '../../shared/constants/terms.constant';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 
@@ -40,11 +42,17 @@ export interface GoogleUserProfile {
   avatarUrl?: string;
 }
 
-/** Fotos de verificación del registro de repartidor (multipart). */
+/** Fotos/documentos de verificación del registro de repartidor (multipart). */
 export interface RegisterDeliveryFiles {
   avatar?: Express.Multer.File[];
   idFront?: Express.Multer.File[];
   idBack?: Express.Multer.File[];
+  // Licencia de conducción: foto por delante y por detrás (misma lógica que
+  // la cédula). SOAT / tecnomecánica: un solo archivo cada uno, foto o pdf.
+  licenseFront?: Express.Multer.File[];
+  licenseBack?: Express.Multer.File[];
+  soat?: Express.Multer.File[];
+  technicalInspection?: Express.Multer.File[];
 }
 
 @Injectable()
@@ -142,6 +150,26 @@ export class UserService {
           'Las fotos de tu documento (por delante y por detrás) son obligatorias',
         );
       }
+      if (!dto.vehiclePlate?.trim()) {
+        throw new BadRequestException(
+          'La placa de tu vehículo es obligatoria',
+        );
+      }
+      if (!files?.licenseFront?.[0] || !files?.licenseBack?.[0]) {
+        throw new BadRequestException(
+          'Las fotos de tu licencia de conducción (por delante y por detrás) son obligatorias',
+        );
+      }
+      if (!files?.soat?.[0]) {
+        throw new BadRequestException(
+          'El SOAT es obligatorio (foto o PDF)',
+        );
+      }
+      if (!files?.technicalInspection?.[0]) {
+        throw new BadRequestException(
+          'La tecnomecánica es obligatoria (foto o PDF)',
+        );
+      }
     }
 
     await this.handleExistingRegistration(email);
@@ -161,8 +189,9 @@ export class UserService {
     await this.assertRelationsExist(dto);
 
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const { acceptedTerms: _acceptedTerms, details, ...registerData } = dto;
     const user = this._userRepository.create({
-      ...dto,
+      ...registerData,
       email,
       password,
       roleTypeId: roleType.id,
@@ -170,25 +199,48 @@ export class UserService {
       // documentos (la pantalla "Cuenta en proceso de habilitación" del front).
       isActive: !isDelivery,
       isEmailVerified: false,
+      // El DTO ya exige acceptedTerms === true (class-validator); se guarda
+      // cuándo y qué versión aceptó.
+      termsAcceptedAt: new Date(),
+      termsVersion: CURRENT_TERMS_VERSION,
     });
     const saved = await this._userRepository.save(user);
 
-    // Fotos de verificación del repartidor (después de crear: si el registro
-    // falla por duplicados no quedan archivos huérfanos en el disco).
+    // Fotos/documentos de verificación del repartidor (después de crear: si
+    // el registro falla por duplicados no quedan archivos huérfanos en disco).
     if (isDelivery && files) {
-      const [avatar, idFront, idBack] = await Promise.all([
-        this._localStorageService.saveImage(files.avatar![0], 'users'),
-        this._localStorageService.saveImage(files.idFront![0], 'users'),
-        this._localStorageService.saveImage(files.idBack![0], 'users'),
-      ]);
+      const [avatar, idFront, idBack, licenseFront, licenseBack, soat, technicalInspection] =
+        await Promise.all([
+          this._localStorageService.saveImage(files.avatar![0], 'users'),
+          this._localStorageService.saveImage(files.idFront![0], 'users'),
+          this._localStorageService.saveImage(files.idBack![0], 'users'),
+          this._localStorageService.saveImage(files.licenseFront![0], 'users'),
+          this._localStorageService.saveImage(files.licenseBack![0], 'users'),
+          this._localStorageService.saveDocument(files.soat![0], 'users'),
+          this._localStorageService.saveDocument(
+            files.technicalInspection![0],
+            'users',
+          ),
+        ]);
+      const vehiclePlate = dto.vehiclePlate!.trim().toUpperCase();
       await this._userRepository.update(saved.id, {
         avatarUrl: avatar.imageUrl,
         identificationFrontUrl: idFront.imageUrl,
         identificationBackUrl: idBack.imageUrl,
+        vehiclePlate,
+        licenseFrontUrl: licenseFront.imageUrl,
+        licenseBackUrl: licenseBack.imageUrl,
+        soatUrl: soat.imageUrl,
+        technicalInspectionUrl: technicalInspection.imageUrl,
       });
       saved.avatarUrl = avatar.imageUrl;
       saved.identificationFrontUrl = idFront.imageUrl;
       saved.identificationBackUrl = idBack.imageUrl;
+      saved.vehiclePlate = vehiclePlate;
+      saved.licenseFrontUrl = licenseFront.imageUrl;
+      saved.licenseBackUrl = licenseBack.imageUrl;
+      saved.soatUrl = soat.imageUrl;
+      saved.technicalInspectionUrl = technicalInspection.imageUrl;
     }
 
     // Un cliente nuevo arranca con su dirección del registro como principal
@@ -200,6 +252,7 @@ export class UserService {
           userId: saved.id,
           label: 'Casa',
           address: dto.address.trim(),
+          details: details?.trim() || undefined,
           latitude: dto.latitude,
           longitude: dto.longitude,
           isDefault: true,
@@ -542,7 +595,7 @@ export class UserService {
     }
     await this.assertRelationsExist(dto);
 
-    const { password, roleTypeCode, ...rest } = dto;
+    const { password, roleTypeCode, acceptedTerms, ...rest } = dto;
 
     if (roleTypeCode) {
       const roleType = await this._roleTypeRepository.findOne({
@@ -575,6 +628,13 @@ export class UserService {
     Object.assign(user, rest);
     if (password) {
       user.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
+    // Onboarding post-Google (cliente): la 1ª vez que confirma el checkbox
+    // de Términos/Tratamiento de Datos desde "Mi perfil" (updateMyProfile).
+    // No se "des-acepta": un `false`/ausente simplemente no toca lo guardado.
+    if (acceptedTerms) {
+      user.termsAcceptedAt = new Date();
+      user.termsVersion = CURRENT_TERMS_VERSION;
     }
 
     return await this._userRepository.save(user);
@@ -667,6 +727,19 @@ export class UserService {
         'Las fotos de tu documento (por delante y por detrás) son obligatorias',
       );
     }
+    if (!files?.licenseFront?.[0] || !files?.licenseBack?.[0]) {
+      throw new BadRequestException(
+        'Las fotos de tu licencia de conducción (por delante y por detrás) son obligatorias',
+      );
+    }
+    if (!files?.soat?.[0]) {
+      throw new BadRequestException('El SOAT es obligatorio (foto o PDF)');
+    }
+    if (!files?.technicalInspection?.[0]) {
+      throw new BadRequestException(
+        'La tecnomecánica es obligatoria (foto o PDF)',
+      );
+    }
 
     const user = await this.findOne(userId);
     if (user.roleType?.code === RoleTypeCode.ADMIN) {
@@ -694,21 +767,107 @@ export class UserService {
       );
     }
 
-    const [avatar, idFront, idBack] = await Promise.all([
-      this._localStorageService.saveImage(files.avatar[0], 'users'),
-      this._localStorageService.saveImage(files.idFront[0], 'users'),
-      this._localStorageService.saveImage(files.idBack[0], 'users'),
-    ]);
+    const [avatar, idFront, idBack, licenseFront, licenseBack, soat, technicalInspection] =
+      await Promise.all([
+        this._localStorageService.saveImage(files.avatar[0], 'users'),
+        this._localStorageService.saveImage(files.idFront[0], 'users'),
+        this._localStorageService.saveImage(files.idBack[0], 'users'),
+        this._localStorageService.saveImage(files.licenseFront[0], 'users'),
+        this._localStorageService.saveImage(files.licenseBack[0], 'users'),
+        this._localStorageService.saveDocument(files.soat[0], 'users'),
+        this._localStorageService.saveDocument(
+          files.technicalInspection[0],
+          'users',
+        ),
+      ]);
 
     await this._userRepository.update(userId, {
       roleTypeId: roleType.id,
       isActive: false,
       identificationNumber: dto.identificationNumber,
       identificationTypeId: dto.identificationTypeId,
+      vehiclePlate: dto.vehiclePlate.trim().toUpperCase(),
       avatarUrl: avatar.imageUrl,
       identificationFrontUrl: idFront.imageUrl,
       identificationBackUrl: idBack.imageUrl,
+      licenseFrontUrl: licenseFront.imageUrl,
+      licenseBackUrl: licenseBack.imageUrl,
+      soatUrl: soat.imageUrl,
+      technicalInspectionUrl: technicalInspection.imageUrl,
+      // El DTO ya exige acceptedTerms === true (class-validator).
+      termsAcceptedAt: new Date(),
+      termsVersion: CURRENT_TERMS_VERSION,
     });
+  }
+
+  /**
+   * Reenvío de documentos del repartidor (perfil propio): sirve para
+   * corregir un documento que el admin rechazó (nota en `observations`) o
+   * para renovar uno vencido (SOAT, tecnomecánica, licencia). Todo opcional —
+   * solo se reemplaza lo que venga en `files`/`dto.vehiclePlate`; el archivo
+   * viejo se borra del disco DESPUÉS de guardar el nuevo (si algo falla no se
+   * pierde el documento anterior). Limpia `observations`: el repartidor ya
+   * respondió, le toca al admin revisar de nuevo (no reactiva la cuenta sola).
+   */
+  async resendDeliveryDocuments(
+    userId: string,
+    dto: ResendDeliveryDocumentsDto,
+    files?: RegisterDeliveryFiles,
+  ): Promise<void> {
+    const user = await this.findOne(userId);
+    if (user.roleType?.code !== RoleTypeCode.DELIVERY) {
+      throw new BadRequestException(
+        'Esta acción es solo para cuentas de repartidor',
+      );
+    }
+
+    const IMAGE_FIELDS: Array<[keyof RegisterDeliveryFiles, keyof User]> = [
+      ['avatar', 'avatarUrl'],
+      ['idFront', 'identificationFrontUrl'],
+      ['idBack', 'identificationBackUrl'],
+      ['licenseFront', 'licenseFrontUrl'],
+      ['licenseBack', 'licenseBackUrl'],
+    ];
+    const DOCUMENT_FIELDS: Array<[keyof RegisterDeliveryFiles, keyof User]> = [
+      ['soat', 'soatUrl'],
+      ['technicalInspection', 'technicalInspectionUrl'],
+    ];
+
+    const updates: Record<string, string | null> = {};
+    const oldPublicIds: string[] = [];
+
+    for (const [fileKey, column] of [...IMAGE_FIELDS, ...DOCUMENT_FIELDS]) {
+      const file = files?.[fileKey]?.[0];
+      if (!file) continue;
+
+      const isDocument = DOCUMENT_FIELDS.some(([key]) => key === fileKey);
+      const { imageUrl } = isDocument
+        ? await this._localStorageService.saveDocument(file, 'users')
+        : await this._localStorageService.saveImage(file, 'users');
+
+      const oldPublicId = this._localStorageService.publicIdFromUrl(
+        user[column] as string | undefined,
+      );
+      if (oldPublicId) oldPublicIds.push(oldPublicId);
+      updates[column] = imageUrl;
+    }
+
+    if (dto.vehiclePlate?.trim()) {
+      updates.vehiclePlate = dto.vehiclePlate.trim().toUpperCase();
+    }
+
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestException(
+        'Sube al menos un documento nuevo o cambia la placa',
+      );
+    }
+
+    updates.observations = null;
+
+    await this._userRepository.update(userId, updates);
+    for (const publicId of oldPublicIds) {
+      await this._localStorageService.deleteImage(publicId);
+    }
   }
 
   /**

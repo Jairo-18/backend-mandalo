@@ -17,6 +17,12 @@ import { IdentificationType } from './identificationType.entity';
 import { Tag } from './tag.entity';
 import { Product } from './product.entity';
 
+// Postgres devuelve los numeric como string; esto los convierte a number.
+const numericTransformer = {
+  to: (value?: number | null) => value,
+  from: (value: string | null) => (value === null ? null : parseFloat(value)),
+};
+
 @Entity({ name: 'organizational' })
 export class Organizational {
   @PrimaryGeneratedColumn()
@@ -131,6 +137,18 @@ export class Organizational {
 
   @Column('boolean', { default: true })
   isActive: boolean;
+
+  // Comisión de la plataforma sobre lo vendido (subtotal): el admin la deja
+  // en 5 el primer mes y la pasa a 12 manualmente cuando corresponda (no hay
+  // cambio automático por fecha). No aplica a domicilios — esa plata se
+  // reparte 100% entre Mándalo y el repartidor (ver DeliveryPricingService).
+  @Column('numeric', {
+    precision: 5,
+    scale: 2,
+    default: 5,
+    transformer: numericTransformer,
+  })
+  commissionOrderRate: number;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt?: Date;

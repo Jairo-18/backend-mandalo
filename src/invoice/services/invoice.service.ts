@@ -26,6 +26,7 @@ import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { isBusinessOpen } from '../../shared/utils/business-hours.util';
 import { PushService } from '../../shared/services/push.service';
+import { DeliveryPricingService } from '../../shared/services/delivery-pricing.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import {
   CreateInvoiceDto,
@@ -78,11 +79,63 @@ export class InvoiceService {
     private readonly _gateway: InvoiceGateway,
     private readonly _pushService: PushService,
     private readonly _localStorageService: LocalStorageService,
+    private readonly _deliveryPricingService: DeliveryPricingService,
   ) {}
 
-  /** Tarifa fija del domicilio vigente (para mostrarla en el checkout). */
-  getDeliveryFee(): number {
-    return this._configService.get<number>('app.deliveryFee') ?? 0;
+  /**
+   * Tarifa del domicilio para el checkout: por distancia entre el negocio y
+   * la dirección de entrega si hay coordenadas de los dos lados; si falta
+   * alguna, cae a la tarifa fija de respaldo (`APP_DELIVERY_FEE`).
+   */
+  previewDeliveryFee(params: {
+    organizationalId: number;
+    latitude?: number;
+    longitude?: number;
+  }): Promise<{ deliveryFee: number; distanceKm: number | null }> {
+    return this.computeDeliveryFee(
+      params.organizationalId,
+      params.latitude,
+      params.longitude,
+    );
+  }
+
+  private async computeDeliveryFee(
+    organizationalId: number,
+    latitude?: number,
+    longitude?: number,
+  ): Promise<{ deliveryFee: number; distanceKm: number | null }> {
+    const organizational = await this._organizationalRepository.findOne({
+      where: { id: organizationalId },
+    });
+    return this.deliveryFeeFromOrg(organizational, latitude, longitude);
+  }
+
+  private deliveryFeeFromOrg(
+    organizational: { latitude?: number; longitude?: number } | null,
+    latitude?: number,
+    longitude?: number,
+  ): { deliveryFee: number; distanceKm: number | null } {
+    if (
+      organizational?.latitude == null ||
+      organizational?.longitude == null ||
+      latitude == null ||
+      longitude == null
+    ) {
+      return {
+        deliveryFee: this._deliveryPricingService.fallbackFee,
+        distanceKm: null,
+      };
+    }
+    const distanceKm = this._deliveryPricingService.haversineKm(
+      organizational.latitude,
+      organizational.longitude,
+      latitude,
+      longitude,
+    );
+    return {
+      deliveryFee: this._deliveryPricingService.feeForDistance(distanceKm),
+      distanceKm: this.round2(distanceKm),
+    };
   }
 
   // ---------- creación (cliente) ----------
@@ -159,7 +212,13 @@ export class InvoiceService {
     }
 
     const pendingState = await this.resolveState(StateTypeCode.PENDING);
-    const deliveryFee = this._configService.get<number>('app.deliveryFee') ?? 0;
+    // Mismo cálculo por distancia del preview del checkout — se recalcula acá
+    // (no se confía en lo que mandó el cliente) para que el cobro sea real.
+    const { deliveryFee } = this.deliveryFeeFromOrg(
+      organizational,
+      address.latitude ?? undefined,
+      address.longitude ?? undefined,
+    );
     const total = this.round2(subtotal + deliveryFee);
 
     // Transacción: cabecera + renglones juntos.
@@ -625,7 +684,7 @@ export class InvoiceService {
     ) {
       return fallback;
     }
-    const distKm = this.haversineKm(
+    const distKm = this._deliveryPricingService.haversineKm(
       org.latitude,
       org.longitude,
       invoice.deliveryLatitude,
@@ -633,22 +692,6 @@ export class InvoiceService {
     );
     const minutes = Math.round(((distKm * 1.3) / 25) * 60) + 5;
     return Math.min(Math.max(minutes, 10), 90);
-  }
-
-  /** Distancia en km entre dos coordenadas (fórmula de haversine). */
-  private haversineKm(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number {
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   private broadcastStateChange(invoice: Invoice, target: StateTypeCode): void {

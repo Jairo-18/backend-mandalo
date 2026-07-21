@@ -18,7 +18,9 @@ export const config = async () => {
       env: process.env.APP_ENV || 'development',
       baseUrl: process.env.APP_BASE_URL || '',
       clientApiKey: process.env.APP_CLIENT_API_KEY || '',
-      // Tarifa fija del domicilio (COP). Por distancia = fase 2.
+      // Tarifa fija del domicilio (COP): SOLO fallback cuando faltan
+      // coordenadas (negocio o dirección sin lat/lng) — el cobro real es por
+      // distancia, ver deliveryBase*/deliveryExtra* abajo.
       deliveryFee: parseFloat(process.env.APP_DELIVERY_FEE as string) || 0,
       // Minutos de entrega por defecto cuando faltan coordenadas para
       // estimar por distancia (negocio o dirección sin lat/lng).
@@ -28,13 +30,30 @@ export const config = async () => {
       // pedidos disponibles que ve el repartidor.
       nearbyRadiusKm:
         parseFloat(process.env.APP_NEARBY_RADIUS_KM as string) || 10,
-      // Comisión de la plataforma al NEGOCIO (toda la plata se trata con él;
-      // al repartidor no se le cobra): % sobre lo vendido (subtotal) y %
-      // sobre los domicilios de los pedidos entregados.
-      commissionOrderRate:
-        parseFloat(process.env.APP_COMMISSION_ORDER_RATE as string) || 5,
-      commissionDeliveryRate:
-        parseFloat(process.env.APP_COMMISSION_DELIVERY_RATE as string) || 20,
+      // Domicilio por distancia: hasta `deliveryBaseKm` se cobra siempre
+      // `deliveryBaseFee` (de eso, `deliveryBaseMandaloCut` es para Mándalo y
+      // el resto para el repartidor). Pasado ese radio, cada km extra suma
+      // `deliveryExtraKmRate`, de lo cual `deliveryExtraMandaloRate`% es para
+      // Mándalo y el resto para el repartidor. Toda la plata del domicilio se
+      // reparte entre Mándalo y el repartidor — el negocio no la toca.
+      deliveryBaseKm:
+        parseFloat(process.env.APP_DELIVERY_BASE_KM as string) || 2,
+      deliveryBaseFee:
+        parseFloat(process.env.APP_DELIVERY_BASE_FEE as string) || 6000,
+      deliveryBaseMandaloCut:
+        parseFloat(process.env.APP_DELIVERY_BASE_MANDALO_CUT as string) ||
+        1000,
+      deliveryExtraKmRate:
+        parseFloat(process.env.APP_DELIVERY_EXTRA_KM_RATE as string) || 3000,
+      deliveryExtraMandaloRate:
+        parseFloat(process.env.APP_DELIVERY_EXTRA_MANDALO_RATE as string) ||
+        16,
+      // Comisión por defecto del NEGOCIO sobre lo vendido (subtotal) — cada
+      // negocio guarda SU propia tasa (organizational.commissionOrderRate,
+      // editable por el admin); esto solo sirve de default al crear uno nuevo.
+      defaultCommissionOrderRate:
+        parseFloat(process.env.APP_DEFAULT_COMMISSION_ORDER_RATE as string) ||
+        5,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

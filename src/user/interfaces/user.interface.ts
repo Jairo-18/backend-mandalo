@@ -17,6 +17,11 @@ export interface UserPaginatedListItem {
   avatarUrl: string | null;
   identificationFrontUrl: string | null;
   identificationBackUrl: string | null;
+  vehiclePlate: string | null;
+  licenseFrontUrl: string | null;
+  licenseBackUrl: string | null;
+  soatUrl: string | null;
+  technicalInspectionUrl: string | null;
   observations: string | null;
   isActive: boolean;
   isBanned: boolean;

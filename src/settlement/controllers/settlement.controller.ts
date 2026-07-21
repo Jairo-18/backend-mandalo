@@ -12,6 +12,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { SettlementUC } from '../useCases/settlement.uc';
 import {
   MarkSettlementDto,
+  MySettlementPeriodsParamsDto,
   SettlementPeriodsParamsDto,
 } from '../dtos/settlement.dto';
 import { UpdateRecordResponseDto } from '../../shared/dtos/response.dto';
@@ -39,6 +40,16 @@ export class SettlementController {
     @Query() params: SettlementPeriodsParamsDto,
   ) {
     const data = await this._settlementUC.periods(user, params);
+    return { statusCode: HttpStatus.OK, data };
+  }
+
+  /** "Mis pedidos" del propio negocio (self-scoped, rol NEGO, solo lectura). */
+  @Get('mine')
+  async myPeriods(
+    @GetUser() user: User,
+    @Query() params: MySettlementPeriodsParamsDto,
+  ) {
+    const data = await this._settlementUC.myPeriods(user, params);
     return { statusCode: HttpStatus.OK, data };
   }
 

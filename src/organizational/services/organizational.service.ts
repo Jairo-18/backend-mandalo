@@ -197,6 +197,7 @@ export class OrganizationalService {
       accountEmail: _ae,
       accountPassword: _ap,
       isActive: _ia,
+      commissionOrderRate: _cor,
       ...data
     } = dto;
     return this.update(mine.id, data);

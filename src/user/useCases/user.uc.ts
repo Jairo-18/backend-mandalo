@@ -6,6 +6,7 @@ import {
   ChangeMyPasswordDto,
   CreateUserDto,
   RegisterUserDto,
+  ResendDeliveryDocumentsDto,
   UpdateMyProfileDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
@@ -59,6 +60,15 @@ export class UserUC {
   /** Onboarding post-Google: la cuenta se convierte en repartidor (inactiva). */
   becomeDelivery(id: string, dto: BecomeDeliveryDto, files: RegisterDeliveryFiles) {
     return this._userService.becomeDelivery(id, dto, files);
+  }
+
+  /** Reenvío de documentos del repartidor (corregir un rechazo o renovar uno vencido). */
+  resendDeliveryDocuments(
+    id: string,
+    dto: ResendDeliveryDocumentsDto,
+    files: RegisterDeliveryFiles,
+  ) {
+    return this._userService.resendDeliveryDocuments(id, dto, files);
   }
 
   changePassword(id: string, dto: ChangeMyPasswordDto) {

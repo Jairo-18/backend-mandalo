@@ -8,6 +8,9 @@ import sharp from 'sharp';
 /** Subcarpetas lógicas de /uploads (una por tipo de imagen). */
 export type UploadFolder = 'users' | 'organizational' | 'products' | 'payments';
 
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const DOCUMENT_MIME_TYPES = [...IMAGE_MIME_TYPES, 'application/pdf'];
+
 /**
  * Almacenamiento de imágenes en el disco del servidor (copiado de samawe).
  * Recibe el buffer de multer, lo optimiza con sharp (webp) y lo guarda en el
@@ -51,19 +54,43 @@ export class LocalStorageService {
     if (!file || !file.buffer) {
       throw new BadRequestException('Archivo no válido o vacío');
     }
-
-    const allowedMimeTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'image/gif',
-    ];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
+    if (!IMAGE_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
         'Tipo de archivo no permitido. Solo se aceptan: jpg, png, webp, gif',
       );
     }
+    return this.writeImage(file, folder);
+  }
 
+  /**
+   * Igual que `saveImage` pero también acepta PDF (SOAT / tecnomecánica: en
+   * la práctica llegan como certificado digital de una sola página y obligar
+   * a fotografiar el papel impreso da peor calidad). Un PDF se guarda tal
+   * cual (no pasa por `sharp`, que no puede rasterizarlo); una imagen sigue
+   * el mismo camino de optimización que `saveImage`.
+   */
+  async saveDocument(
+    file: Express.Multer.File,
+    folder: UploadFolder,
+  ): Promise<{ imageUrl: string; publicId: string }> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Archivo no válido o vacío');
+    }
+    if (!DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Tipo de archivo no permitido. Solo se aceptan: jpg, png, webp, gif o pdf',
+      );
+    }
+    if (file.mimetype === 'application/pdf') {
+      return this.writePdf(file, folder);
+    }
+    return this.writeImage(file, folder);
+  }
+
+  private async writeImage(
+    file: Express.Multer.File,
+    folder: UploadFolder,
+  ): Promise<{ imageUrl: string; publicId: string }> {
     const targetDir = path.join(this.uploadsDir, folder);
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -81,6 +108,25 @@ export class LocalStorageService {
       .webp({ quality: 80, effort: 6 })
       .resize({ width: maxWidth, withoutEnlargement: true })
       .toFile(filePath);
+
+    const publicId = `${folder}/${filename}`;
+    const imageUrl = `${this.baseUrl}/uploads/${publicId}`;
+
+    return { imageUrl, publicId };
+  }
+
+  private async writePdf(
+    file: Express.Multer.File,
+    folder: UploadFolder,
+  ): Promise<{ imageUrl: string; publicId: string }> {
+    const targetDir = path.join(this.uploadsDir, folder);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const filename = `${uuidv4()}.pdf`;
+    const filePath = path.join(targetDir, filename);
+    await fs.promises.writeFile(filePath, file.buffer);
 
     const publicId = `${folder}/${filename}`;
     const imageUrl = `${this.baseUrl}/uploads/${publicId}`;

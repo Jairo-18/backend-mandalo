@@ -7,11 +7,14 @@ import {
   IsLatitude,
   IsLongitude,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -133,6 +136,19 @@ export class CreateOrganizationalDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Comisión sobre lo vendido (%). Solo el admin la cambia (5% primer mes, 12% después, a mano).',
+    example: 5,
+    default: 5,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  commissionOrderRate?: number;
 
   @ApiPropertyOptional({
     description: 'Hora de apertura "HH:MM" (hora Colombia). Null = sin horario.',

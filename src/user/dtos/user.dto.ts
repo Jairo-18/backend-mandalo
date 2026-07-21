@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  Equals,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -104,6 +105,12 @@ export class CreateUserDto {
   @IsInt()
   identificationTypeId?: number;
 
+  @ApiPropertyOptional({ example: 'ABC12D', description: 'Placa del vehículo (repartidor)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  vehiclePlate?: string;
+
   @ApiPropertyOptional({ example: '3001234567' })
   @IsOptional()
   @IsString()
@@ -174,6 +181,16 @@ export class RegisterUserDto {
   @MaxLength(255)
   address?: string;
 
+  @ApiPropertyOptional({
+    example: 'Torre 2 apto 301, portón café',
+    description:
+      'Referencia específica de la dirección (solo cliente): se guarda en userAddress.details de la dirección "Casa" inicial',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  details?: string;
+
   @ApiPropertyOptional({ example: 1.0287, description: 'Latitud (ubicación del dispositivo)' })
   @IsOptional()
   @Type(() => Number)
@@ -201,6 +218,30 @@ export class RegisterUserDto {
   @Type(() => Number)
   @IsInt()
   identificationTypeId?: number;
+
+  @ApiPropertyOptional({
+    example: 'ABC12D',
+    description: 'Placa del vehículo (repartidor)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  vehiclePlate?: string;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Aceptación de los Términos y Condiciones y la Política de Tratamiento de Datos (debe ser true)',
+  })
+  // El registro de repartidor va en multipart/form-data: el valor llega como
+  // el string "true", no como boolean — sin esto @IsBoolean lo rechazaría.
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  @Equals(true, {
+    message:
+      'Debes aceptar los Términos y Condiciones y la Política de Tratamiento de Datos',
+  })
+  acceptedTerms: boolean;
 }
 
 /**
@@ -274,6 +315,15 @@ export class UpdateMyProfileDto {
   @Type(() => Number)
   @IsInt()
   identificationTypeId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Aceptación de Términos y Condiciones / Tratamiento de Datos (onboarding post-Google, cliente). Solo `true` tiene efecto — se ignora si no viene.',
+  })
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsOptional()
+  @IsBoolean()
+  acceptedTerms?: boolean;
 }
 
 /** Reenviar el correo de verificación (público, botón del login). */
@@ -300,6 +350,39 @@ export class BecomeDeliveryDto {
   @Type(() => Number)
   @IsInt()
   identificationTypeId: number;
+
+  @ApiProperty({ example: 'ABC12D', description: 'Placa del vehículo' })
+  @IsString()
+  @IsNotEmpty({ message: 'La placa del vehículo es requerida' })
+  @MaxLength(20)
+  vehiclePlate: string;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Aceptación de los Términos y Condiciones y la Política de Tratamiento de Datos (debe ser true)',
+  })
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  @Equals(true, {
+    message:
+      'Debes aceptar los Términos y Condiciones y la Política de Tratamiento de Datos',
+  })
+  acceptedTerms: boolean;
+}
+
+/**
+ * Reenvío de documentos del repartidor (perfil propio, `POST
+ * /user/me/resend-documents`): todo opcional — solo se reemplaza lo que el
+ * usuario vuelva a subir (corregir un documento rechazado o renovar uno
+ * vencido como el SOAT). Los archivos van sueltos en el multipart, sin DTO.
+ */
+export class ResendDeliveryDocumentsDto {
+  @ApiPropertyOptional({ example: 'ABC12D', description: 'Placa del vehículo' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  vehiclePlate?: string;
 }
 
 /** Cambio de contraseña del propio usuario (exige la contraseña actual). */
@@ -348,4 +431,13 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsString()
   @MaxLength(2000)
   observations?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Aceptación de Términos y Condiciones / Tratamiento de Datos. Solo `true` tiene efecto — se ignora si no viene.',
+  })
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsOptional()
+  @IsBoolean()
+  acceptedTerms?: boolean;
 }

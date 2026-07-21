@@ -11,7 +11,7 @@ export function GetSettlementPeriodsDocs() {
     ApiBearerAuth(),
     ApiOperation({
       summary:
-        'Períodos facturados de un negocio (semana/mes/año) con la comisión ' +
+        'Períodos facturados de un negocio (quincena/mes/año) con la comisión ' +
         'a cobrar y el estado del cobro — solo ADMIN',
     }),
     ApiOkResponse(),

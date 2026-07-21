@@ -7,6 +7,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import { MailsService } from './services/mails.service';
 import { MailTemplateService } from './services/mail-template.service';
 import { PushService } from './services/push.service';
+import { DeliveryPricingService } from './services/delivery-pricing.service';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from './entities/user.entity';
 import { AccessSessions } from './entities/accessSessions.entity';
@@ -26,6 +27,7 @@ import { InvoiceDetail } from './entities/invoiceDetail.entity';
 import { UserPushToken } from './entities/userPushToken.entity';
 import { ChatMessage } from './entities/chatMessage.entity';
 import { BusinessSettlement } from './entities/businessSettlement.entity';
+import { DeliverySettlement } from './entities/deliverySettlement.entity';
 import { UserRepository } from './repositories/user.repository';
 import { AccessSessionsRepository } from './repositories/accessSessions.repository';
 import { OrganizationalRepository } from './repositories/organizational.repository';
@@ -44,6 +46,7 @@ import { InvoiceDetailRepository } from './repositories/invoiceDetail.repository
 import { UserPushTokenRepository } from './repositories/userPushToken.repository';
 import { ChatMessageRepository } from './repositories/chatMessage.repository';
 import { BusinessSettlementRepository } from './repositories/businessSettlement.repository';
+import { DeliverySettlementRepository } from './repositories/deliverySettlement.repository';
 
 @Module({})
 export class SharedModule {
@@ -109,6 +112,7 @@ export class SharedModule {
           UserPushToken,
           ChatMessage,
           BusinessSettlement,
+          DeliverySettlement,
         ]),
 
         PassportModule,
@@ -147,6 +151,7 @@ export class SharedModule {
         MailsService,
         MailTemplateService,
         PushService,
+        DeliveryPricingService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -165,6 +170,7 @@ export class SharedModule {
         UserPushTokenRepository,
         ChatMessageRepository,
         BusinessSettlementRepository,
+        DeliverySettlementRepository,
       ],
       exports: [
         JwtModule,
@@ -173,6 +179,7 @@ export class SharedModule {
         MailsService,
         MailTemplateService,
         PushService,
+        DeliveryPricingService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -191,6 +198,7 @@ export class SharedModule {
         UserPushTokenRepository,
         ChatMessageRepository,
         BusinessSettlementRepository,
+        DeliverySettlementRepository,
       ],
     };
   }

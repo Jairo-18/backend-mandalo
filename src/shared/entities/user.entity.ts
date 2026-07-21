@@ -101,10 +101,37 @@ export class User {
   @Column('varchar', { length: 500, nullable: true })
   identificationBackUrl?: string;
 
+  // Documentos del vehículo del repartidor: placa + licencia (foto por delante
+  // y por detrás, como la cédula) + SOAT y tecnomecánica (un solo archivo cada
+  // uno, foto O pdf — llegan como certificado de una sola página).
+  @Column('varchar', { length: 20, nullable: true })
+  vehiclePlate?: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  licenseFrontUrl?: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  licenseBackUrl?: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  soatUrl?: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  technicalInspectionUrl?: string;
+
   // Observaciones del admin para el usuario (p. ej. por qué su cuenta de
   // repartidor aún no se activa: "la foto de la cédula está borrosa").
   @Column('text', { nullable: true })
   observations?: string;
+
+  // Aceptación de Términos y Condiciones + Política de Tratamiento de Datos
+  // (Habeas Data). `termsVersion` guarda QUÉ versión aceptó (permite pedir
+  // re-aceptación si el texto cambia materialmente más adelante).
+  @Column('timestamp', { nullable: true })
+  termsAcceptedAt?: Date;
+
+  @Column('varchar', { length: 20, nullable: true })
+  termsVersion?: string;
 
   @Exclude()
   @Column('varchar', { length: 255, nullable: true })

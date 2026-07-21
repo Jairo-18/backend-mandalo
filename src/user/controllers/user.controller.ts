@@ -31,6 +31,7 @@ import {
   CreateUserDto,
   PushTokenDto,
   RegisterUserDto,
+  ResendDeliveryDocumentsDto,
   ResendVerificationDto,
   UpdateMyProfileDto,
   UpdateUserDto,
@@ -124,8 +125,10 @@ export class UserController {
 
   /**
    * Registro de repartidor: multipart/form-data con los campos del DTO más
-   * las fotos de verificación OBLIGATORIAS (`avatar`, `idFront`, `idBack`).
-   * La cuenta nace inactiva; un admin revisa los documentos y la activa.
+   * los documentos de verificación OBLIGATORIOS (`avatar`, `idFront`,
+   * `idBack`, `licenseFront`, `licenseBack`, `soat`, `technicalInspection`;
+   * `soat`/`technicalInspection` aceptan foto o PDF). La cuenta nace
+   * inactiva; un admin revisa los documentos y la activa.
    */
   @Post('register/delivery')
   @SkipApiKey()
@@ -136,6 +139,10 @@ export class UserController {
       { name: 'avatar', maxCount: 1 },
       { name: 'idFront', maxCount: 1 },
       { name: 'idBack', maxCount: 1 },
+      { name: 'licenseFront', maxCount: 1 },
+      { name: 'licenseBack', maxCount: 1 },
+      { name: 'soat', maxCount: 1 },
+      { name: 'technicalInspection', maxCount: 1 },
     ]),
   )
   async registerDelivery(
@@ -252,6 +259,10 @@ export class UserController {
       { name: 'avatar', maxCount: 1 },
       { name: 'idFront', maxCount: 1 },
       { name: 'idBack', maxCount: 1 },
+      { name: 'licenseFront', maxCount: 1 },
+      { name: 'licenseBack', maxCount: 1 },
+      { name: 'soat', maxCount: 1 },
+      { name: 'technicalInspection', maxCount: 1 },
     ]),
   )
   async becomeDelivery(
@@ -264,6 +275,39 @@ export class UserController {
       statusCode: HttpStatus.OK,
       message:
         '¡Listo! Un administrador revisará tus datos y activará tu cuenta de repartidor.',
+    };
+  }
+
+  /**
+   * Reenvío de documentos del repartidor (perfil propio): corrige un
+   * documento que el admin rechazó (nota en `observations`) o renueva uno
+   * vencido (SOAT, tecnomecánica, licencia). Todo opcional — multipart con
+   * los mismos 7 campos del registro DELI, pero ninguno obligatorio; solo se
+   * reemplaza lo que venga.
+   */
+  @Post('me/resend-documents')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'avatar', maxCount: 1 },
+      { name: 'idFront', maxCount: 1 },
+      { name: 'idBack', maxCount: 1 },
+      { name: 'licenseFront', maxCount: 1 },
+      { name: 'licenseBack', maxCount: 1 },
+      { name: 'soat', maxCount: 1 },
+      { name: 'technicalInspection', maxCount: 1 },
+    ]),
+  )
+  async resendDocuments(
+    @GetUser() user: User,
+    @Body() body: ResendDeliveryDocumentsDto,
+    @UploadedFiles() files: RegisterDeliveryFiles,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.resendDeliveryDocuments(user.id, body, files);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Documentos actualizados. Un administrador los revisará de nuevo.',
     };
   }
 

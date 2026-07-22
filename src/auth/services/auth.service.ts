@@ -187,6 +187,9 @@ export class AuthService {
         // "Cuenta en proceso de habilitación" (+ la nota del admin).
         isActive: user.isActive,
         observations: user.observations ?? null,
+        // null = nunca aceptó Términos/Tratamiento de Datos → el front lo lleva
+        // al gate de aceptación antes de entrar a la app (§41).
+        termsAcceptedAt: user.termsAcceptedAt ?? null,
         ...(isNewUser !== undefined && { isNewUser }),
       },
       session: { accessSessionId },
@@ -278,6 +281,7 @@ export class AuthService {
         // habilitación del repartidor (y la nota del admin) al abrir la app.
         isActive: user.isActive,
         observations: user.observations ?? null,
+        termsAcceptedAt: user.termsAcceptedAt ?? null,
       },
     };
   }

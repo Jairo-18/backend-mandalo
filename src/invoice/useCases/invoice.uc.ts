@@ -43,4 +43,8 @@ export class InvoiceUC {
   uploadPaymentProof(user: User, id: number, file: Express.Multer.File) {
     return this._invoiceService.uploadPaymentProof(user, id, file);
   }
+
+  requestPayment(user: User, id: number) {
+    return this._invoiceService.requestPayment(user, id);
+  }
 }

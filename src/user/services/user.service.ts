@@ -30,6 +30,7 @@ import { LocalStorageService } from '../../localStorage/services/localStorage.se
 import { CURRENT_TERMS_VERSION } from '../../shared/constants/terms.constant';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
+import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
@@ -69,7 +70,26 @@ export class UserService {
     private readonly _localStorageService: LocalStorageService,
     private readonly _userAddressRepository: UserAddressRepository,
     private readonly _invoiceRepository: InvoiceRepository,
+    private readonly _organizationalRepository: OrganizationalRepository,
   ) {}
+
+  /**
+   * Registra la aceptación de Términos y Condiciones + Tratamiento de Datos del
+   * usuario autenticado (gate de inicio de sesión). Si el usuario es dueño de
+   * uno o más negocios, se marca también la aceptación del negocio con el mismo
+   * acto (los dos aceptan a la vez, ver §41).
+   */
+  async acceptTerms(userId: string): Promise<void> {
+    const now = new Date();
+    await this._userRepository.update(userId, {
+      termsAcceptedAt: now,
+      termsVersion: CURRENT_TERMS_VERSION,
+    });
+    await this._organizationalRepository.update(
+      { legalPersonId: userId },
+      { termsAcceptedAt: now, termsVersion: CURRENT_TERMS_VERSION },
+    );
+  }
 
   async findOne(id: string): Promise<User> {
     const user = await this._userRepository.findOne({
@@ -818,6 +838,16 @@ export class UserService {
     if (user.roleType?.code !== RoleTypeCode.DELIVERY) {
       throw new BadRequestException(
         'Esta acción es solo para cuentas de repartidor',
+      );
+    }
+    // Una vez el admin VERIFICA y activa la cuenta, los documentos quedan
+    // congelados: el repartidor ya no puede cambiarlos ni la placa (para
+    // renovar/corregir algo debe pedírselo al administrador). Los datos de
+    // ubicación/identificación del perfil (cédula, tipo, depto, municipio,
+    // dirección) sí siguen editables por si viaja a trabajar a otra ciudad.
+    if (user.isActive) {
+      throw new BadRequestException(
+        'Tu cuenta ya está verificada: no puedes cambiar tus documentos. Si necesitas actualizar alguno, contacta al administrador.',
       );
     }
 

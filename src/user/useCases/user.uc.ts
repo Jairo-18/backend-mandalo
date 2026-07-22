@@ -71,6 +71,11 @@ export class UserUC {
     return this._userService.resendDeliveryDocuments(id, dto, files);
   }
 
+  /** Registra la aceptación de términos del usuario (y de su negocio si lo tiene). */
+  acceptTerms(id: string) {
+    return this._userService.acceptTerms(id);
+  }
+
   changePassword(id: string, dto: ChangeMyPasswordDto) {
     return this._userService.changePassword(
       id,

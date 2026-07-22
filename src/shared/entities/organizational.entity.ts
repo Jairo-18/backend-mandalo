@@ -138,6 +138,15 @@ export class Organizational {
   @Column('boolean', { default: true })
   isActive: boolean;
 
+  // Aceptación de Términos y Condiciones + Política de Tratamiento de Datos
+  // del NEGOCIO. La marca el usuario dueño (rol NEGO) cuando acepta en el gate
+  // de inicio de sesión (mismo momento que su propia aceptación de usuario).
+  @Column('timestamp', { nullable: true })
+  termsAcceptedAt?: Date | null;
+
+  @Column('varchar', { length: 20, nullable: true })
+  termsVersion?: string | null;
+
   // Comisión de la plataforma sobre lo vendido (subtotal): el admin la deja
   // en 5 el primer mes y la pasa a 12 manualmente cuando corresponda (no hay
   // cambio automático por fecha). No aplica a domicilios — esa plata se

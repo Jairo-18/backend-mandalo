@@ -184,8 +184,12 @@ export class OrganizationalService {
 
   /**
    * Edición del negocio PROPIO (rol NEGO, desde su panel): el negocio se
-   * resuelve por el JWT y se ignoran los campos que solo maneja el admin
-   * (dueño, cuenta de acceso y estado activo).
+   * resuelve por el JWT y se ignoran los campos que el negocio NO puede tocar.
+   * Solo el admin/vendedor asigna la identidad legal (razón social, NIT y su
+   * tipo), las etiquetas, la ubicación (departamento, municipio, dirección y
+   * coordenadas) y lo administrativo (dueño, cuenta de acceso, estado, comisión).
+   * El negocio edita el resto: nombre comercial, descripción, teléfono, logo,
+   * horario y datos de pago. Se descartan aquí aunque el cliente los mande.
    */
   async updateMine(
     userId: string,
@@ -193,11 +197,23 @@ export class OrganizationalService {
   ): Promise<Organizational> {
     const mine = await this.findMine(userId);
     const {
+      // Administrativo (solo admin).
       legalPersonId: _lp,
       accountEmail: _ae,
       accountPassword: _ap,
       isActive: _ia,
       commissionOrderRate: _cor,
+      // Identidad legal (la asigna el vendedor).
+      legalName: _ln,
+      identificationNumber: _in,
+      identificationTypeId: _it,
+      tagIds: _tg,
+      // Ubicación (la asigna el administrador).
+      departmentId: _dp,
+      municipalityId: _mn,
+      address: _ad,
+      latitude: _lat,
+      longitude: _lng,
       ...data
     } = dto;
     return this.update(mine.id, data);

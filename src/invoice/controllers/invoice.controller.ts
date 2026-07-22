@@ -138,6 +138,22 @@ export class InvoiceController {
     };
   }
 
+  /**
+   * El negocio le solicita al cliente el comprobante del pago (no cambia el
+   * estado; solo notifica al cliente por socket + push).
+   */
+  @Post(':id/request-payment')
+  async requestPayment(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._invoiceUC.requestPayment(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Le pedimos el comprobante del pago al cliente.',
+    };
+  }
+
   @Patch(':id/state')
   @ChangeInvoiceStateDocs()
   async changeState(

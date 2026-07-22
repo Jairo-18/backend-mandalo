@@ -512,6 +512,56 @@ export class InvoiceService {
     return { paymentProofUrl: imageUrl };
   }
 
+  /**
+   * El NEGOCIO le pide al cliente el comprobante del pago (botón "Solicitar
+   * pago"): útil cuando el pedido se aceptó pero el cliente aún no ha subido
+   * el soporte y por eso no se puede pasar a preparación. Solo notifica
+   * (socket + push); no cambia el estado del pedido.
+   */
+  async requestPayment(user: User, id: number): Promise<void> {
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+
+    if (user.roleType?.code !== RoleTypeCode.BUSINESS) {
+      throw new ForbiddenException(
+        'Solo el negocio puede solicitar el pago al cliente.',
+      );
+    }
+    const org = await this.findMyOrganizational(user);
+    if (invoice.organizationalId !== org.id) {
+      throw new ForbiddenException('Este pedido no es de tu negocio.');
+    }
+    if (invoice.paidType?.code === 'EFEC') {
+      throw new BadRequestException(
+        'El pago en efectivo no necesita comprobante.',
+      );
+    }
+    if (invoice.paymentProofUrl) {
+      throw new BadRequestException(
+        'El cliente ya subió el comprobante del pago.',
+      );
+    }
+    const finished = [
+      StateTypeCode.DELIVERED,
+      StateTypeCode.CANCELLED,
+    ] as string[];
+    if (finished.includes(invoice.stateType?.code ?? '')) {
+      throw new BadRequestException('El pedido ya está finalizado.');
+    }
+
+    const orgName = org.tradeName || org.legalName || 'El negocio';
+    // Aviso en vivo (app abierta) + push (app cerrada) al cliente.
+    this._gateway.emitToUser(invoice.userId, 'invoice:payment-requested', {
+      invoiceId: invoice.id,
+      message: `${orgName} necesita el comprobante de tu pago para preparar el pedido #${invoice.id}.`,
+    });
+    void this._pushService.sendToUsers([invoice.userId], {
+      title: `Pedido #${invoice.id} — falta tu comprobante 💳`,
+      body: `${orgName} necesita el comprobante de tu pago para empezar a preparar tu pedido.`,
+      data: { type: 'order', invoiceId: invoice.id },
+    });
+  }
+
   // ---------- cambio de estado (máquina de estados) ----------
 
   async changeState(
@@ -586,6 +636,19 @@ export class InvoiceService {
     if (target === StateTypeCode.ACCEPTED && !dto.prepEstimatedMinutes) {
       throw new BadRequestException(
         'Indica en cuántos minutos estará listo el pedido.',
+      );
+    }
+
+    // Comprobante obligatorio para preparar (métodos distintos a efectivo): el
+    // pedido se acepta sin él, pero el negocio no puede pasarlo a preparación
+    // hasta que el cliente suba el comprobante del pago (§ flujo de recibo).
+    if (
+      target === StateTypeCode.PREPARING &&
+      invoice.paidType?.code !== 'EFEC' &&
+      !invoice.paymentProofUrl
+    ) {
+      throw new BadRequestException(
+        'El cliente aún no ha subido el comprobante del pago. Solicítaselo antes de preparar el pedido.',
       );
     }
 

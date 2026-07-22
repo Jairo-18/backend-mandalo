@@ -247,6 +247,23 @@ export class UserController {
   }
 
   /**
+   * Registra la aceptación de Términos y Tratamiento de Datos del usuario
+   * autenticado (gate de inicio de sesión). Si es dueño de un negocio, marca
+   * también la aceptación del negocio.
+   */
+  @Post('me/accept-terms')
+  @UseGuards(AuthGuard())
+  async acceptTerms(
+    @GetUser() user: User,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.acceptTerms(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Gracias por aceptar. ¡Bienvenid@ a Mándalo!',
+    };
+  }
+
+  /**
    * Onboarding post-Google: convierte la cuenta autenticada en REPARTIDOR.
    * Multipart con la identificación + las fotos de verificación (mismas del
    * registro DELI). La cuenta queda inactiva hasta que un admin la revise.

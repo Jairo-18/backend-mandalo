@@ -15,6 +15,7 @@ import { ApiKeyGuard } from './shared/guards/api-key.guard';
 import { ClientIpThrottlerGuard } from './shared/guards/client-ip-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { AppSettingsModule } from './appSettings/appSettings.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CategoryTypeModule } from './categoryType/categoryType.module';
 import { TagModule } from './tag/tag.module';
@@ -80,6 +81,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     AuthModule,
     UserModule,
+    AppSettingsModule,
     CatalogModule,
     CategoryTypeModule,
     TagModule,

@@ -47,6 +47,8 @@ import { UserPushTokenRepository } from './repositories/userPushToken.repository
 import { ChatMessageRepository } from './repositories/chatMessage.repository';
 import { BusinessSettlementRepository } from './repositories/businessSettlement.repository';
 import { DeliverySettlementRepository } from './repositories/deliverySettlement.repository';
+import { AppSettings } from './entities/appSettings.entity';
+import { AppSettingsRepository } from './repositories/appSettings.repository';
 
 @Module({})
 export class SharedModule {
@@ -113,6 +115,7 @@ export class SharedModule {
           ChatMessage,
           BusinessSettlement,
           DeliverySettlement,
+          AppSettings,
         ]),
 
         PassportModule,
@@ -171,6 +174,7 @@ export class SharedModule {
         ChatMessageRepository,
         BusinessSettlementRepository,
         DeliverySettlementRepository,
+        AppSettingsRepository,
       ],
       exports: [
         JwtModule,
@@ -199,6 +203,7 @@ export class SharedModule {
         ChatMessageRepository,
         BusinessSettlementRepository,
         DeliverySettlementRepository,
+        AppSettingsRepository,
       ],
     };
   }

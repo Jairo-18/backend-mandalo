@@ -8,6 +8,7 @@ import {
   ResetPasswordDto,
   SignOutBodyDto,
 } from '../dtos/auth.dto';
+import { RegisterUserDto } from '../../user/dtos/user.dto';
 
 @Injectable()
 export class AuthUC {
@@ -15,6 +16,10 @@ export class AuthUC {
 
   async login(body: LoginDto) {
     return await this._authService.signIn(body);
+  }
+
+  async registerQuick(body: RegisterUserDto) {
+    return await this._authService.quickRegister(body);
   }
 
   async googleSignIn(body: GoogleSignInDto) {

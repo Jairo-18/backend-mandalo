@@ -20,6 +20,7 @@ import {
   CreateInvoiceDto,
   DeliveryFeePreviewParamsDto,
   PaginatedInvoicesParamsDto,
+  RejectPaymentDto,
   UpdateInvoiceStateDto,
 } from '../dtos/invoice.dto';
 import {
@@ -151,6 +152,23 @@ export class InvoiceController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Le pedimos el comprobante del pago al cliente.',
+    };
+  }
+
+  /**
+   * El negocio RECHAZA el comprobante subido (borra la foto + guarda el motivo
+   * y avisa al cliente para que vuelva a subir). No cambia el estado.
+   */
+  @Post(':id/reject-payment')
+  async rejectPayment(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RejectPaymentDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._invoiceUC.rejectPayment(user, id, body.reason);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Comprobante rechazado. El cliente deberá subir uno nuevo.',
     };
   }
 

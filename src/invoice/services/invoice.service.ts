@@ -493,6 +493,9 @@ export class InvoiceService {
       'payments',
     );
     invoice.paymentProofUrl = imageUrl;
+    // Al reenviar, se borra el motivo de un rechazo anterior (el negocio lo
+    // revisa de nuevo).
+    invoice.paymentProofRejectedReason = null;
     await this._invoiceRepository.save(invoice);
     if (previous) await this._localStorageService.deleteImage(previous);
 
@@ -558,6 +561,61 @@ export class InvoiceService {
     void this._pushService.sendToUsers([invoice.userId], {
       title: `Pedido #${invoice.id} — falta tu comprobante 💳`,
       body: `${orgName} necesita el comprobante de tu pago para empezar a preparar tu pedido.`,
+      data: { type: 'order', invoiceId: invoice.id },
+    });
+  }
+
+  /**
+   * El NEGOCIO RECHAZA el comprobante que subió el cliente (la foto no
+   * corresponde, el monto no coincide, etc.): borra la foto, guarda el motivo y
+   * avisa al cliente para que vuelva a subir. No cambia el estado del pedido.
+   */
+  async rejectPayment(
+    user: User,
+    id: number,
+    reason: string,
+  ): Promise<void> {
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+
+    if (user.roleType?.code !== RoleTypeCode.BUSINESS) {
+      throw new ForbiddenException(
+        'Solo el negocio puede rechazar el comprobante.',
+      );
+    }
+    const org = await this.findMyOrganizational(user);
+    if (invoice.organizationalId !== org.id) {
+      throw new ForbiddenException('Este pedido no es de tu negocio.');
+    }
+    if (!invoice.paymentProofUrl) {
+      throw new BadRequestException(
+        'El cliente aún no ha subido un comprobante para rechazar.',
+      );
+    }
+    if (!reason?.trim()) {
+      throw new BadRequestException(
+        'Indica por qué rechazas el comprobante (para que el cliente lo corrija).',
+      );
+    }
+
+    const previous = this._localStorageService.publicIdFromUrl(
+      invoice.paymentProofUrl,
+    );
+    invoice.paymentProofUrl = null;
+    invoice.paymentProofRejectedReason = reason.trim();
+    await this._invoiceRepository.save(invoice);
+    if (previous) await this._localStorageService.deleteImage(previous);
+
+    const full = await this.findByIdWithRelations(id);
+    // El cliente ve el rechazo al instante (socket) + push si está cerrada.
+    this._gateway.emitToUser(invoice.userId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+    });
+    const orgName = org.tradeName || org.legalName || 'El negocio';
+    void this._pushService.sendToUsers([invoice.userId], {
+      title: `Pedido #${invoice.id} — comprobante rechazado`,
+      body: `${orgName}: ${reason.trim()}. Vuelve a subir tu comprobante.`,
       data: { type: 'order', invoiceId: invoice.id },
     });
   }

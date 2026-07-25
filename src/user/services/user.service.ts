@@ -35,6 +35,7 @@ import { OrganizationalRepository } from '../../shared/repositories/organization
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
 const PASSWORD_RESET_CODE_MINUTES = 15;
+const DELETION_TOKEN_MINUTES = 30;
 
 export interface GoogleUserProfile {
   googleId: string;
@@ -287,6 +288,67 @@ export class UserService {
     }
 
     return saved;
+  }
+
+  /**
+   * Registro RÁPIDO de cliente (modo invitado, checkout, §44): crea la cuenta
+   * USER **ya verificada** (sin el paso de correo, para que pueda pedir de
+   * una) con sus términos aceptados y su dirección principal. Devuelve el
+   * usuario con `roleType` cargado para que AuthService arme el auto-login.
+   * La verificación de correo queda para después (la cuenta ya es usable).
+   */
+  async registerQuickClient(dto: RegisterUserDto): Promise<User> {
+    const email = dto.email.toLowerCase();
+    await this.assertEmailAvailable(email);
+    await this.assertUsernameAvailable(dto.username);
+    await this.assertPhoneAvailable(dto.phone);
+    await this.assertIdentificationAvailable(dto.identificationNumber);
+    await this.assertRelationsExist(dto);
+
+    const roleType = await this._roleTypeRepository.findOne({
+      where: { code: RoleTypeCode.CLIENT },
+    });
+    if (!roleType) {
+      throw new BadRequestException(
+        `El rol "${RoleTypeCode.CLIENT}" no está configurado en la base de datos`,
+      );
+    }
+
+    const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const { acceptedTerms: _acceptedTerms, details, ...registerData } = dto;
+    const user = this._userRepository.create({
+      ...registerData,
+      email,
+      password,
+      roleTypeId: roleType.id,
+      isActive: true,
+      // Cuenta usable al instante: sin el gate de verificación de correo.
+      isEmailVerified: true,
+      termsAcceptedAt: new Date(),
+      termsVersion: CURRENT_TERMS_VERSION,
+    });
+    const saved = await this._userRepository.save(user);
+
+    // Dirección principal ("Casa"), igual que en el registro normal de cliente.
+    if (dto.address?.trim()) {
+      await this._userAddressRepository.save(
+        this._userAddressRepository.create({
+          userId: saved.id,
+          label: 'Casa',
+          address: dto.address.trim(),
+          details: details?.trim() || undefined,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          isDefault: true,
+        }),
+      );
+    }
+
+    // Con roleType cargado para el toRolePayload del auto-login.
+    return this._userRepository.findOne({
+      where: { id: saved.id },
+      relations: ['roleType'],
+    });
   }
 
   /**
@@ -677,6 +739,171 @@ export class UserService {
       );
     }
     await this._userRepository.delete(user.id);
+  }
+
+  /**
+   * Núcleo compartido de "eliminar mi cuenta" (exigido por Google Play, ver
+   * NOTAS.md §47): lo usan tanto el self-service logueado
+   * (`requestSelfDeletion`) como la confirmación por correo SIN sesión
+   * (`confirmDeletionByToken`, punto 1b, §49).
+   * - Sin historial (nunca pidió/entregó y no tiene un negocio propio) →
+   *   borrado físico inmediato, mismo camino que el admin.
+   * - Con historial → la FILA no se borra (perdería facturas/mensajes de
+   *   OTROS usuarios: `invoice.userId` es CASCADE), pero sus DATOS
+   *   PERSONALES sí se borran de inmediato (anonimización): nombre, correo,
+   *   teléfono, dirección/coordenadas, foto de perfil, número de
+   *   identificación y — si es repartidor — las fotos de cédula, licencia,
+   *   SOAT y tecnomecánica. Lo único que queda es el `id` (esqueleto), para
+   *   que pedidos/chats/liquidaciones de otras personas sigan teniendo a
+   *   quién apuntar sin romperse. Además se banea (bloquea el login y, por
+   *   `AuthService.validateSession`, también las sesiones ya abiertas). Si
+   *   es dueño de un negocio (NEGO), ese negocio se desactiva de una vez.
+   */
+  private async performAccountDeletion(
+    user: User,
+  ): Promise<{ hardDeleted: boolean }> {
+    const orders = await this._invoiceRepository.count({
+      where: [{ userId: user.id }, { deliveryUserId: user.id }],
+    });
+    const businesses = await this._organizationalRepository.count({
+      where: { legalPersonId: user.id },
+    });
+
+    if (orders === 0 && businesses === 0) {
+      await this._userRepository.delete(user.id);
+      return { hardDeleted: true };
+    }
+
+    user.isBanned = true;
+    user.deletionRequestedAt = new Date();
+    // Un solo uso: si venía de un enlace de correo (confirmDeletionByToken),
+    // el token queda inutilizado de una vez.
+    user.deletionRequestToken = null;
+    user.deletionRequestTokenExpiry = null;
+
+    // Anonimización inmediata: solo queda el `id` (por las FK de otros) y lo
+    // que hace falta para que la cuenta quede inutilizable (isBanned) y con
+    // rastro de auditoría (deletionRequestedAt). Nada de esto es reversible.
+    user.fullName = 'Usuario eliminado';
+    user.username = null;
+    user.email = `eliminado-${user.id}@mandalo.invalid`;
+    // Contraseña inutilizable: aunque isBanned ya bloquea el login, no tiene
+    // sentido dejar viva una contraseña que funcionaba.
+    user.password = await bcrypt.hash(
+      crypto.randomBytes(32).toString('hex'),
+      SALT_ROUNDS,
+    );
+    user.phone = null;
+    user.address = null;
+    user.latitude = null;
+    user.longitude = null;
+    user.avatarUrl = null;
+    user.identificationNumber = null;
+    user.identificationFrontUrl = null;
+    user.identificationBackUrl = null;
+    user.vehiclePlate = null;
+    user.licenseFrontUrl = null;
+    user.licenseBackUrl = null;
+    user.soatUrl = null;
+    user.technicalInspectionUrl = null;
+    user.observations = null;
+    user.googleId = null;
+
+    await this._userRepository.save(user);
+
+    if (businesses > 0) {
+      await this._organizationalRepository.update(
+        { legalPersonId: user.id },
+        { isActive: false },
+      );
+    }
+
+    return { hardDeleted: false };
+  }
+
+  /** "Eliminar mi cuenta" con sesión activa (botón en Mi perfil). */
+  async requestSelfDeletion(id: string): Promise<{ hardDeleted: boolean }> {
+    const user = await this.findOne(id);
+    return this.performAccountDeletion(user);
+  }
+
+  /**
+   * Solicitud de eliminación SIN sesión (paso 1, punto 1b de la auditoría):
+   * la página web pública pide el correo; si existe una cuenta se manda un
+   * enlace de confirmación (mismo patrón que `generateEmailVerificationToken`
+   * — token random + vencimiento). No confirma nada todavía: eso lo hace
+   * `confirmDeletionByToken` cuando el usuario abre el enlace, para que nadie
+   * pueda borrar una cuenta ajena solo con saber su correo.
+   */
+  async requestDeletionByEmail(email: string): Promise<void> {
+    const user = await this._userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
+    if (!user) {
+      throw new NotFoundException('No encontramos una cuenta con ese correo.');
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date();
+    expiry.setMinutes(expiry.getMinutes() + DELETION_TOKEN_MINUTES);
+    await this._userRepository.update(user.id, {
+      deletionRequestToken: token,
+      deletionRequestTokenExpiry: expiry,
+    });
+
+    const baseUrl =
+      this._configService.get<string>('app.baseUrl') || 'http://localhost:3000';
+    const confirmLink = `${baseUrl}/user/confirm-deletion?token=${token}&userId=${user.id}`;
+
+    try {
+      await this._mailsService.sendEmail({
+        to: user.email,
+        subject: 'Confirma la eliminación de tu cuenta',
+        body: this._mailTemplateService.deletionRequestTemplate(
+          confirmLink,
+          user.fullName,
+        ),
+      });
+    } catch (error) {
+      console.error('Error sending account deletion email:', error);
+      throw new HttpException(
+        {
+          message:
+            'No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.',
+          code: 'DELETION_EMAIL_FAILED',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
+  /**
+   * Solicitud de eliminación SIN sesión, paso 2: valida el token del enlace
+   * del correo y, si es válido y no venció, ejecuta el mismo borrado/baneo
+   * que el self-service logueado.
+   */
+  async confirmDeletionByToken(
+    userId: string,
+    token: string,
+  ): Promise<{ hardDeleted: boolean }> {
+    const user = await this._userRepository.findOne({
+      where: { id: userId, deletionRequestToken: token },
+    });
+    if (!user) {
+      throw new BadRequestException(
+        'El enlace no es válido o ya fue utilizado.',
+      );
+    }
+    if (
+      !user.deletionRequestTokenExpiry ||
+      user.deletionRequestTokenExpiry < new Date()
+    ) {
+      throw new BadRequestException(
+        'El enlace expiró. Vuelve a solicitar la eliminación de tu cuenta.',
+      );
+    }
+
+    return this.performAccountDeletion(user);
   }
 
   /**

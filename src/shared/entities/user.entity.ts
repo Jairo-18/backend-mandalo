@@ -153,6 +153,21 @@ export class User {
   @Column('boolean', { default: false })
   isBanned: boolean;
 
+  // Cuándo el propio usuario pidió eliminar su cuenta (self-service, ver
+  // NOTAS.md §47). Con historial (pedidos/negocio) no se borra físicamente
+  // — queda baneada y marcada acá para limpieza/anonimización manual.
+  @Column('timestamp', { nullable: true })
+  deletionRequestedAt?: Date;
+
+  // Solicitud de eliminación SIN sesión (página web pública, ver NOTAS.md
+  // §49): el enlace del correo trae este token de un solo uso.
+  @Exclude()
+  @Column('varchar', { length: 255, nullable: true })
+  deletionRequestToken?: string;
+
+  @Column('timestamp', { nullable: true })
+  deletionRequestTokenExpiry?: Date;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt?: Date;
 

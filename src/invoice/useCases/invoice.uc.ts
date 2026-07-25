@@ -47,4 +47,8 @@ export class InvoiceUC {
   requestPayment(user: User, id: number) {
     return this._invoiceService.requestPayment(user, id);
   }
+
+  rejectPayment(user: User, id: number, reason: string) {
+    return this._invoiceService.rejectPayment(user, id, reason);
+  }
 }

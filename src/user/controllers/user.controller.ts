@@ -31,6 +31,7 @@ import {
   CreateUserDto,
   PushTokenDto,
   RegisterUserDto,
+  RequestAccountDeletionDto,
   ResendDeliveryDocumentsDto,
   ResendVerificationDto,
   UpdateMyProfileDto,
@@ -105,6 +106,68 @@ export class UserController {
       .status(success ? HttpStatus.OK : HttpStatus.BAD_REQUEST)
       .type('html')
       .send(this._mailTemplateService.verifyEmailResultPage(success, message));
+  }
+
+  /**
+   * Solicitud de eliminación de cuenta SIN sesión (página web pública fuera
+   * de la app, punto 1b de la auditoría de Google Play — ver NOTAS.md §49).
+   * Manda un enlace de confirmación al correo; no borra nada todavía.
+   */
+  @Post('request-deletion')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async requestDeletion(
+    @Body() body: RequestAccountDeletionDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.requestDeletionByEmail(body.email);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Te enviamos un correo para confirmar la eliminación de tu cuenta.',
+    };
+  }
+
+  /**
+   * Enlace del correo de "eliminar mi cuenta" (sin sesión): se abre en el
+   * navegador, por eso responde una página HTML y no JSON (mismo patrón que
+   * `verifyEmail`).
+   */
+  @Get('confirm-deletion')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async confirmDeletion(
+    @Query('token') token: string,
+    @Query('userId') userId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    let success = true;
+    let message = 'Tu cuenta y tus datos fueron eliminados de Mándalo.';
+
+    if (!token || !userId) {
+      success = false;
+      message = 'El enlace no está completo o no es válido.';
+    } else {
+      try {
+        const { hardDeleted } = await this._userUC.confirmDeletionByToken(
+          userId,
+          token,
+        );
+        if (!hardDeleted) {
+          message =
+            'Tu cuenta y tus datos personales fueron eliminados de inmediato. El registro de tus pedidos se conserva de forma anónima por razones contables.';
+        }
+      } catch (error) {
+        success = false;
+        message =
+          error?.response?.message ||
+          error?.message ||
+          'No se pudo eliminar tu cuenta. Vuelve a intentarlo desde la página de solicitud.';
+      }
+    }
+
+    res
+      .status(success ? HttpStatus.OK : HttpStatus.BAD_REQUEST)
+      .type('html')
+      .send(this._mailTemplateService.deletionResultPage(success, message));
   }
 
   @Post('register/client')
@@ -373,6 +436,25 @@ export class UserController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Notificaciones desactivadas en este dispositivo',
+    };
+  }
+
+  /**
+   * "Eliminar mi cuenta" (self-service, exigido por Google Play): sin
+   * historial se borra al instante; con historial la cuenta queda
+   * bloqueada (baneada) y marcada para limpieza manual — ver
+   * `UserService.requestSelfDeletion`.
+   */
+  @Delete('me')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async deleteMe(@GetUser() user: User): Promise<DeleteRecordResponseDto> {
+    const { hardDeleted } = await this._userUC.requestSelfDeletion(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: hardDeleted
+        ? 'Tu cuenta fue eliminada.'
+        : 'Tu cuenta y tus datos personales fueron eliminados. El registro de tus pedidos se conserva de forma anónima por razones contables.',
     };
   }
 

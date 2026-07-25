@@ -20,6 +20,7 @@ import { INVALID_ACCESS_DATA_MESSAGE } from '../constants/messages.constants';
 import { NOT_FOUND_RESPONSE } from '../../shared/constants/response.constant';
 import { User } from '../../shared/entities/user.entity';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RegisterUserDto } from '../../user/dtos/user.dto';
 
 @Injectable()
 export class AuthService {
@@ -65,6 +66,16 @@ export class AuthService {
     }
 
     return await this.buildSignInResponse(user);
+  }
+
+  /**
+   * Registro RÁPIDO (modo invitado, §44): crea la cuenta de cliente YA
+   * verificada y devuelve el auto-login (tokens + user), para que el invitado
+   * que armó su carrito pueda pedir sin el paso de verificación de correo.
+   */
+  async quickRegister(body: RegisterUserDto) {
+    const user = await this._userService.registerQuickClient(body);
+    return this.buildSignInResponse(user, true);
   }
 
   /**
@@ -222,6 +233,11 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException(UNAUTHORIZED_MESSAGE);
     }
+
+    // Corta también las sesiones YA abiertas de una cuenta baneada (p. ej.
+    // por "eliminar mi cuenta" self-service), no solo el próximo login: el
+    // JWT es stateless y por sí solo seguiría siendo válido hasta expirar.
+    this.assertNotBanned(user);
 
     return user;
   }

@@ -151,17 +151,19 @@ export class RegisterUserDto {
   @MaxLength(255)
   password: string;
 
-  @ApiPropertyOptional({ example: 'juanp' })
-  @IsOptional()
+  // Nombre de usuario OBLIGATORIO en el auto-registro (cliente y repartidor).
+  @ApiProperty({ example: 'juanp' })
   @IsString()
+  @IsNotEmpty({ message: 'El nombre de usuario es requerido' })
   @MaxLength(100)
-  username?: string;
+  username: string;
 
-  @ApiPropertyOptional({ example: '3001234567' })
-  @IsOptional()
+  // Celular OBLIGATORIO en el auto-registro (todos los formularios ya lo exigen).
+  @ApiProperty({ example: '3001234567' })
   @IsString()
+  @IsNotEmpty({ message: 'El número de celular es requerido' })
   @MaxLength(30)
-  phone?: string;
+  phone: string;
 
   @ApiPropertyOptional({ description: 'ID del municipio', type: Number })
   @IsOptional()
@@ -397,6 +399,18 @@ export class ChangeMyPasswordDto {
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
   @MaxLength(255)
   newPassword: string;
+}
+
+/**
+ * Solicitud de eliminación de cuenta SIN sesión (página web pública, exigida
+ * por Google Play — ver NOTAS.md §49). No requiere estar logueado: el correo
+ * identifica la cuenta y el backend manda el enlace de confirmación.
+ */
+export class RequestAccountDeletionDto {
+  @ApiProperty({ type: String, example: 'tu@correo.com', required: true })
+  @IsEmail({}, { message: 'El correo no es válido' })
+  @IsNotEmpty({ message: 'El email es requerido' })
+  email: string;
 }
 
 /** Token de notificaciones push del dispositivo (lo emite Expo en la app). */

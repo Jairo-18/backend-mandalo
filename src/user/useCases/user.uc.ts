@@ -88,6 +88,18 @@ export class UserUC {
     return this._userService.delete(id);
   }
 
+  requestSelfDeletion(id: string) {
+    return this._userService.requestSelfDeletion(id);
+  }
+
+  requestDeletionByEmail(email: string) {
+    return this._userService.requestDeletionByEmail(email);
+  }
+
+  confirmDeletionByToken(userId: string, token: string) {
+    return this._userService.confirmDeletionByToken(userId, token);
+  }
+
   updateAvatar(id: string, file: Express.Multer.File) {
     return this._userService.updateAvatar(id, file);
   }

@@ -5,11 +5,9 @@ import {
   Param,
   ParseIntPipe,
   Query,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { ExploreUC } from '../useCases/explore.uc';
 import {
@@ -31,6 +29,12 @@ import {
  * Explorar (vista del CLIENTE, rol USER): negocios visibles y sus productos.
  * Solo lectura — la gestión vive en /organizational (admin) y /product (NEGO).
  *
+ * PÚBLICO (sin AuthGuard, §44): un INVITADO sin sesión puede ver el home y
+ * armar el carrito antes de registrarse ("engancharlo"). Sigue protegido por
+ * el `ApiKeyGuard` global (header `X-Client-Key`) — no es una API abierta, solo
+ * no exige JWT. Ninguno de estos endpoints usa el usuario (el `near` viaja como
+ * query param), así que quitar el guard no cambia la lógica.
+ *
  * Todo el controller se CACHEA (CacheInterceptor, clave = URL con query
  * params): la respuesta es idéntica para todos los usuarios, así que el feed
  * del home no castiga a Postgres en cada scroll. Invalidación por TTL corto
@@ -38,7 +42,6 @@ import {
  */
 @Controller('explore')
 @ApiTags('Explorar (cliente)')
-@UseGuards(AuthGuard())
 @UseInterceptors(CacheInterceptor)
 export class ExploreController {
   constructor(private readonly _exploreUC: ExploreUC) {}

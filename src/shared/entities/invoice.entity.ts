@@ -117,6 +117,12 @@ export class Invoice {
   @Column('varchar', { length: 500, nullable: true })
   paymentProofUrl?: string | null;
 
+  // Si el negocio RECHAZA el comprobante (p. ej. "esa foto no es el soporte"),
+  // guarda el motivo y se borra la foto: el cliente ve el motivo y vuelve a
+  // subir. Se limpia cuando el cliente sube un comprobante nuevo.
+  @Column('varchar', { length: 255, nullable: true })
+  paymentProofRejectedReason?: string | null;
+
   // ---- Códigos de verificación del flujo físico ----
   // Recogida: lo ve el REPARTIDOR en su app y se lo dicta al negocio, que lo
   // digita al despachar (valida que la comida se entregó al repartidor real).

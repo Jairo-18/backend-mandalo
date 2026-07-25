@@ -18,6 +18,18 @@ import { Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 
+/** Motivo por el que el negocio rechaza el comprobante de pago del cliente. */
+export class RejectPaymentDto {
+  @ApiProperty({
+    example: 'La foto no corresponde al comprobante del pago.',
+    maxLength: 255,
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Indica el motivo del rechazo' })
+  @MaxLength(255)
+  reason: string;
+}
+
 /** Un renglón del pedido: qué producto y cuántos. El precio lo pone el backend. */
 export class CreateInvoiceItemDto {
   @ApiProperty({ description: 'ID del producto del negocio', example: 12 })

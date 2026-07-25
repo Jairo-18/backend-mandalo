@@ -23,6 +23,7 @@ import {
 import { SkipApiKey } from '../../shared/decorators/skip-api-key.decorator';
 import { GetUser } from '../../shared/decorators/user.decorator';
 import { User } from '../../shared/entities/user.entity';
+import { RegisterUserDto } from '../../user/dtos/user.dto';
 
 @Controller('auth')
 @ApiTags('Autenticación')
@@ -38,6 +39,29 @@ export class AuthController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Bienvenid@',
+      data: {
+        tokens: data.tokens,
+        user: data.user,
+        accessSessionId: data.session?.accessSessionId,
+      },
+    };
+  }
+
+  /**
+   * Registro RÁPIDO del invitado (§44): crea la cuenta de cliente verificada y
+   * devuelve el auto-login para que pueda pedir de una. Público (`@SkipApiKey`
+   * como el resto del registro), con throttle contra abuso.
+   */
+  @Post('/register-quick')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async registerQuick(
+    @Body() body: RegisterUserDto,
+  ): Promise<SignInResponseDto> {
+    const data = await this._authUC.registerQuick(body);
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: '¡Cuenta creada! Ya puedes completar tu pedido.',
       data: {
         tokens: data.tokens,
         user: data.user,

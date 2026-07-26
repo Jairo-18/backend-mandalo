@@ -54,6 +54,13 @@ export const config = async () => {
       defaultCommissionOrderRate:
         parseFloat(process.env.APP_DEFAULT_COMMISSION_ORDER_RATE as string) ||
         5,
+      // Tarifa de servicio que se le cobra al CLIENTE encima del subtotal
+      // (SIN domicilio): `serviceFeePercent`% del subtotal, topado en
+      // `serviceFeeCap` COP — 100% ingreso de Mándalo (no se reparte con el
+      // negocio ni el repartidor, a diferencia de subtotal/deliveryFee).
+      serviceFeePercent:
+        parseFloat(process.env.APP_SERVICE_FEE_PERCENT as string) || 5,
+      serviceFeeCap: parseFloat(process.env.APP_SERVICE_FEE_CAP as string) || 5000,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

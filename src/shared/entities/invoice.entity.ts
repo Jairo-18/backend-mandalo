@@ -98,6 +98,17 @@ export class Invoice {
   })
   deliveryFee: number;
 
+  // Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
+  // fijo (APP_SERVICE_FEE_PERCENT/APP_SERVICE_FEE_CAP) — 100% ingreso de
+  // Mándalo, no toca la comisión del negocio ni el corte del repartidor.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  serviceFee: number;
+
   @Column('numeric', {
     precision: 12,
     scale: 2,

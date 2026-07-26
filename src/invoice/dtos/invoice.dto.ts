@@ -157,6 +157,16 @@ export class DeliveryFeePreviewParamsDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Subtotal del carrito (sin domicilio) — para calcular la tarifa de servicio en el preview.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subtotal?: number;
 }
 
 /** Parámetros del listado paginado; filtro opcional por estados (coma-separados). */

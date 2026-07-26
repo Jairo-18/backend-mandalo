@@ -85,18 +85,44 @@ export class InvoiceService {
   /**
    * Tarifa del domicilio para el checkout: por distancia entre el negocio y
    * la dirección de entrega si hay coordenadas de los dos lados; si falta
-   * alguna, cae a la tarifa fija de respaldo (`APP_DELIVERY_FEE`).
+   * alguna, cae a la tarifa fija de respaldo (`APP_DELIVERY_FEE`). De paso
+   * calcula la tarifa de servicio (si mandaron `subtotal`) para que el
+   * checkout arme el total completo con una sola llamada.
    */
-  previewDeliveryFee(params: {
+  async previewDeliveryFee(params: {
     organizationalId: number;
     latitude?: number;
     longitude?: number;
-  }): Promise<{ deliveryFee: number; distanceKm: number | null }> {
-    return this.computeDeliveryFee(
+    subtotal?: number;
+  }): Promise<{
+    deliveryFee: number;
+    distanceKm: number | null;
+    serviceFee: number;
+  }> {
+    const { deliveryFee, distanceKm } = await this.computeDeliveryFee(
       params.organizationalId,
       params.latitude,
       params.longitude,
     );
+    return {
+      deliveryFee,
+      distanceKm,
+      serviceFee: this.computeServiceFee(params.subtotal ?? 0),
+    };
+  }
+
+  /**
+   * Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
+   * fijo (`APP_SERVICE_FEE_PERCENT`/`APP_SERVICE_FEE_CAP`) — 100% ingreso de
+   * Mándalo, no toca la comisión del negocio (se calcula sobre el subtotal
+   * igual, ver `settlement.service.ts`) ni el corte del repartidor (se
+   * calcula sobre `deliveryFee`) porque vive en su propio campo.
+   */
+  private computeServiceFee(subtotal: number): number {
+    const percent =
+      this._configService.get<number>('app.serviceFeePercent') ?? 5;
+    const cap = this._configService.get<number>('app.serviceFeeCap') ?? 5000;
+    return Math.min(this.round2((subtotal * percent) / 100), cap);
   }
 
   private async computeDeliveryFee(
@@ -219,7 +245,8 @@ export class InvoiceService {
       address.latitude ?? undefined,
       address.longitude ?? undefined,
     );
-    const total = this.round2(subtotal + deliveryFee);
+    const serviceFee = this.computeServiceFee(subtotal);
+    const total = this.round2(subtotal + deliveryFee + serviceFee);
 
     // Transacción: cabecera + renglones juntos.
     const saved = await this._dataSource.transaction(async (manager) => {
@@ -234,6 +261,7 @@ export class InvoiceService {
         deliveryLongitude: address.longitude ?? null,
         subtotal,
         deliveryFee,
+        serviceFee,
         total,
         notes: dto.notes ?? null,
         // Códigos del flujo físico: recogida (repartidor → negocio) y

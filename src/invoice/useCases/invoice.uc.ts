@@ -16,6 +16,10 @@ export class InvoiceUC {
     return this._invoiceService.previewDeliveryFee(params);
   }
 
+  serviceFeeSummary(user: User) {
+    return this._invoiceService.serviceFeeSummary(user);
+  }
+
   create(user: User, dto: CreateInvoiceDto) {
     return this._invoiceService.create(user, dto);
   }

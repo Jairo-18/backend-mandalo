@@ -21,6 +21,7 @@ interface QuincenaTotals {
   periodStart: string; // YYYY-MM-DD, día 1 o 16 del mes (hora Colombia)
   ordersCount: number;
   salesTotal: number;
+  serviceFeeTotal: number;
 }
 
 /** Fila que ve el admin: quincena (cobrable) o mes/año (resumen). */
@@ -32,6 +33,15 @@ export interface SettlementPeriodItem {
   salesTotal: number;
   commissionRate: number;
   commissionTotal: number;
+  /**
+   * Tarifa de servicio cobrada al CLIENTE en esos pedidos (100% de Mándalo,
+   * ver §53 de NOTAS) — el negocio la recibió junto con el resto del pago
+   * (efectivo o transferencia), así que se le pide de vuelta igual que la
+   * comisión. Informativa: no tiene tasa (ya viene calculada por pedido) ni
+   * se persiste en `BusinessSettlement` — se recalcula en vivo siempre desde
+   * `invoice.serviceFee`, que no cambia tras la entrega.
+   */
+  serviceFeeTotal: number;
   /** Solo quincena: el cobro real (se marca/desmarca). Null en mes/año. */
   settlement: {
     id: number;
@@ -186,7 +196,12 @@ export class SettlementService {
       if (!totals.some((t) => t.periodStart === settlement.periodStart)) {
         items.push(
           this.toQuincenaItem(
-            { periodStart: settlement.periodStart, ordersCount: 0, salesTotal: 0 },
+            {
+              periodStart: settlement.periodStart,
+              ordersCount: 0,
+              salesTotal: 0,
+              serviceFeeTotal: 0,
+            },
             rate,
             settlement,
           ),
@@ -211,6 +226,7 @@ export class SettlementService {
       salesTotal: row.salesTotal,
       commissionRate: rate,
       commissionTotal,
+      serviceFeeTotal: row.serviceFeeTotal,
       settlement: settlement
         ? {
             id: settlement.id,
@@ -239,12 +255,13 @@ export class SettlementService {
     // quincenas pagadas), y ESE resultado se vuelve a juntar por año.
     if (granularity === 'year') {
       const months = this.rollUp(quincenas, 'month', rate);
-      const byYear = new Map<string, { orders: number; sales: number; paid: number; total: number }>();
+      const byYear = new Map<string, { orders: number; sales: number; serviceFee: number; paid: number; total: number }>();
       for (const m of months) {
         const year = m.periodStart.slice(0, 4);
-        const acc = byYear.get(year) ?? { orders: 0, sales: 0, paid: 0, total: 0 };
+        const acc = byYear.get(year) ?? { orders: 0, sales: 0, serviceFee: 0, paid: 0, total: 0 };
         acc.orders += m.ordersCount;
         acc.sales += m.salesTotal;
+        acc.serviceFee += m.serviceFeeTotal;
         acc.total += 1;
         if (m.paidSubperiods === m.totalSubperiods && (m.totalSubperiods ?? 0) > 0) acc.paid += 1;
         byYear.set(year, acc);
@@ -262,6 +279,7 @@ export class SettlementService {
             salesTotal: this.round2(acc.sales),
             commissionRate: rate,
             commissionTotal,
+            serviceFeeTotal: this.round2(acc.serviceFee),
             settlement: null,
             paidSubperiods: acc.paid,
             totalSubperiods: acc.total,
@@ -269,12 +287,13 @@ export class SettlementService {
         });
     }
 
-    const byMonth = new Map<string, { orders: number; sales: number; paid: number; total: number }>();
+    const byMonth = new Map<string, { orders: number; sales: number; serviceFee: number; paid: number; total: number }>();
     for (const q of quincenas) {
       const month = q.periodStart.slice(0, 7); // YYYY-MM
-      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, paid: 0, total: 0 };
+      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, serviceFee: 0, paid: 0, total: 0 };
       acc.orders += q.ordersCount;
       acc.sales += q.salesTotal;
+      acc.serviceFee += q.serviceFeeTotal;
       acc.total += 1;
       if (q.settlement?.isPaid) acc.paid += 1;
       byMonth.set(month, acc);
@@ -292,6 +311,7 @@ export class SettlementService {
           salesTotal: this.round2(acc.sales),
           commissionRate: rate,
           commissionTotal,
+          serviceFeeTotal: this.round2(acc.serviceFee),
           settlement: null,
           paidSubperiods: acc.paid,
           totalSubperiods: acc.total,
@@ -320,6 +340,7 @@ export class SettlementService {
       .select(`to_char(${bucketExpr}, 'YYYY-MM-DD')`, 'periodStart')
       .addSelect('COUNT(*)::int', 'ordersCount')
       .addSelect('COALESCE(SUM(invoice."subtotal"), 0)', 'salesTotal')
+      .addSelect('COALESCE(SUM(invoice."serviceFee"), 0)', 'serviceFeeTotal')
       .where('invoice."organizationalId" = :oid', { oid: organizationalId })
       .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
       .andWhere('invoice."deliveredAt" IS NOT NULL')
@@ -334,12 +355,14 @@ export class SettlementService {
       periodStart: string;
       ordersCount: number;
       salesTotal: string;
+      serviceFeeTotal: string;
     }>();
 
     return rows.map((row) => ({
       periodStart: row.periodStart,
       ordersCount: Number(row.ordersCount),
       salesTotal: this.round2(parseFloat(row.salesTotal)),
+      serviceFeeTotal: this.round2(parseFloat(row.serviceFeeTotal)),
     }));
   }
 

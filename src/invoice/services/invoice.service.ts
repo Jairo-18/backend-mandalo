@@ -291,6 +291,32 @@ export class InvoiceService {
     return this.hideCodesFor(user, full);
   }
 
+  /**
+   * Total histórico de tarifa de servicio (100% ingreso de Mándalo) sumado
+   * sobre los pedidos ENTREGADOS — mismo criterio de "plata real" que usa
+   * `settlement.service.ts` para `salesTotal`. Solo ADMIN.
+   */
+  async serviceFeeSummary(
+    user: User,
+  ): Promise<{ total: number; ordersCount: number }> {
+    this.assertRole(user, RoleTypeCode.ADMIN);
+
+    const row = await this._invoiceRepository
+      .createQueryBuilder('invoice')
+      .innerJoin('invoice.stateType', 'stateType')
+      .select('COALESCE(SUM(invoice."serviceFee"), 0)', 'total')
+      .addSelect('COUNT(*)::int', 'ordersCount')
+      .where('stateType.code = :delivered', {
+        delivered: StateTypeCode.DELIVERED,
+      })
+      .getRawOne<{ total: string; ordersCount: number }>();
+
+    return {
+      total: this.round2(parseFloat(row?.total ?? '0')),
+      ordersCount: Number(row?.ordersCount ?? 0),
+    };
+  }
+
   // ---------- lectura (scoped por rol) ----------
 
   async findOne(user: User, id: number): Promise<Invoice> {

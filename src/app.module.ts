@@ -28,6 +28,9 @@ import { ChatModule } from './chat/chat.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { DeliverySettlementModule } from './deliverySettlement/deliverySettlement.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BackupModule } from './backup/backup.module';
+import { CronJobModule } from './cronJobs/cron.job.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -94,6 +97,9 @@ import { ScheduleModule } from '@nestjs/schedule';
     SettlementModule,
     DeliverySettlementModule,
     ScheduleModule.forRoot(),
+    BackupModule,
+    CronJobModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

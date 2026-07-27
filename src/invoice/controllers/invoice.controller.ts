@@ -83,6 +83,13 @@ export class InvoiceController {
     return { statusCode: HttpStatus.OK, data };
   }
 
+  // Antes de :id (literal, no numérico) para no chocar con ParseIntPipe.
+  @Get('service-fee-summary')
+  async serviceFeeSummary(@GetUser() user: User) {
+    const data = await this._invoiceUC.serviceFeeSummary(user);
+    return { statusCode: HttpStatus.OK, data };
+  }
+
   // Antes de :id para que "available" no caiga en el ParseIntPipe.
   @Get('available')
   @GetAvailableInvoicesDocs()

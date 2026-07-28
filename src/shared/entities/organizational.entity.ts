@@ -131,6 +131,10 @@ export class Organizational {
   @Column('varchar', { length: 60, nullable: true })
   bancolombiaAccount?: string | null;
 
+  // Tipo de la cuenta Bancolombia: 'AHORROS' | 'CORRIENTE'.
+  @Column('varchar', { length: 20, nullable: true })
+  bancolombiaAccountType?: string | null;
+
   // Imagen del QR de Bancolombia que sube el negocio (upload, no texto).
   @Column('varchar', { length: 500, nullable: true })
   bancolombiaQrUrl?: string | null;

@@ -338,6 +338,7 @@ export class ExploreService {
       nequiNumber: organizational.nequiNumber,
       nequiKey: organizational.nequiKey,
       bancolombiaAccount: organizational.bancolombiaAccount,
+      bancolombiaAccountType: organizational.bancolombiaAccountType,
       bancolombiaQrUrl: organizational.bancolombiaQrUrl,
     };
   }

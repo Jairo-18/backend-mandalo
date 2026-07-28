@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
   IsInt,
   IsLatitude,
   IsLongitude,
@@ -226,6 +227,14 @@ export class CreateOrganizationalDto {
   @IsString()
   @MaxLength(60)
   bancolombiaAccount?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tipo de la cuenta Bancolombia',
+    enum: ['AHORROS', 'CORRIENTE'],
+  })
+  @IsOptional()
+  @IsIn(['AHORROS', 'CORRIENTE'])
+  bancolombiaAccountType?: 'AHORROS' | 'CORRIENTE' | null;
 }
 
 export class UpdateOrganizationalDto extends PartialType(

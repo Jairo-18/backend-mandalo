@@ -312,6 +312,7 @@ async function main() {
         paymentHolderName: `Dueño ${b.tradeName}`,
         nequiNumber: `30${RI(10, 99)}${RI(100000, 999999)}`,
         bancolombiaAccount: `${RI(100, 999)}-${RI(100000, 999999)}-01`,
+        bancolombiaAccountType: RI(0, 1) ? 'AHORROS' : 'CORRIENTE',
         termsAcceptedAt: new Date(),
         termsVersion: TERMS_VERSION,
         tags: b.tags.map((c) => tagByCode[c]).filter(Boolean),

@@ -246,6 +246,16 @@ export class ExploreService {
         categoryTypeId: params.categoryTypeId,
       });
     }
+    if (params.tagIds?.length) {
+      query.andWhere(
+        `EXISTS (
+          SELECT 1 FROM "organizationalTag" ot
+          WHERE ot."organizationalId" = organizational.id
+            AND ot."tagId" IN (:...tagIds)
+        )`,
+        { tagIds: params.tagIds },
+      );
+    }
 
     this.applyNearFilter(query, params.lat, params.lng);
 

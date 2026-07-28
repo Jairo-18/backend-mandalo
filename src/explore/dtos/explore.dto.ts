@@ -45,4 +45,19 @@ export class PaginatedExploreProductsParamsDto extends NearParamsDto {
   @Type(() => Number)
   @IsInt()
   categoryTypeId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Filtrar por etiquetas del negocio que vende el producto, ids separados por coma (ej. 1,3)',
+    example: '1,3',
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.split(',').filter(Boolean).map(Number)
+      : value,
+  )
+  @IsArray()
+  @IsInt({ each: true })
+  tagIds?: number[];
 }

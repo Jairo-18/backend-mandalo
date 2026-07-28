@@ -13,6 +13,7 @@ import { DepartmentRepository } from '../../shared/repositories/department.repos
 import { MunicipalityRepository } from '../../shared/repositories/municipality.repository';
 import { IdentificationTypeRepository } from '../../shared/repositories/identificationType.repository';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
+import { ProductRepository } from '../../shared/repositories/product.repository';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { UserService } from '../../user/services/user.service';
@@ -47,6 +48,7 @@ export class OrganizationalService {
     private readonly _userService: UserService,
     private readonly _localStorageService: LocalStorageService,
     private readonly _invoiceRepository: InvoiceRepository,
+    private readonly _productRepository: ProductRepository,
   ) {}
 
   async create(dto: CreateOrganizationalDto): Promise<Organizational> {
@@ -252,7 +254,14 @@ export class OrganizationalService {
     }
 
     // accountEmail/accountPassword solo aplican al crear; en edición se ignoran.
-    const { tagIds, accountEmail: _e, accountPassword: _p, ...data } = dto;
+    // logoUrl se ignora acá: solo lo toca updateLogo() (limpia el archivo viejo).
+    const {
+      tagIds,
+      accountEmail: _e,
+      accountPassword: _p,
+      logoUrl: _l,
+      ...data
+    } = dto;
 
     // Si se vincula (o cambia) el dueño, el usuario pasa a rol NEGO.
     if (data.legalPersonId && data.legalPersonId !== organizational.legalPersonId) {
@@ -281,6 +290,29 @@ export class OrganizationalService {
         'Este negocio tiene pedidos en el historial y no se puede eliminar. Desactívalo en su lugar.',
       );
     }
+
+    // El CASCADE de la DB borra sus productos de una (Product.organizationalId
+    // es ON DELETE CASCADE) sin pasar por ProductService — hay que limpiar sus
+    // fotos y el logo/QR del negocio ACÁ, antes de que la fila desaparezca, o
+    // quedan huérfanas en el disco del VPS para siempre.
+    const products = await this._productRepository.find({
+      where: { organizationalId: organizational.id },
+    });
+    for (const product of products) {
+      for (const url of product.images ?? []) {
+        const publicId = this._localStorageService.publicIdFromUrl(url);
+        if (publicId) await this._localStorageService.deleteImage(publicId);
+      }
+    }
+    const logoPublicId = this._localStorageService.publicIdFromUrl(
+      organizational.logoUrl,
+    );
+    if (logoPublicId) await this._localStorageService.deleteImage(logoPublicId);
+    const qrPublicId = this._localStorageService.publicIdFromUrl(
+      organizational.bancolombiaQrUrl,
+    );
+    if (qrPublicId) await this._localStorageService.deleteImage(qrPublicId);
+
     await this._organizationalRepository.remove(organizational);
   }
 
@@ -336,6 +368,42 @@ export class OrganizationalService {
     }
 
     return { bancolombiaQrUrl: imageUrl };
+  }
+
+  /** Quita el logo del negocio (opcional): borra el archivo y limpia la columna. */
+  async removeLogo(id: number): Promise<void> {
+    const organizational = await this.findOne(id);
+    const publicId = this._localStorageService.publicIdFromUrl(
+      organizational.logoUrl,
+    );
+    await this._organizationalRepository.update(id, { logoUrl: null });
+    if (publicId) {
+      await this._localStorageService.deleteImage(publicId);
+    }
+  }
+
+  /** Logo del negocio propio (rol NEGO): resuelve el id desde el JWT. */
+  async removeMyLogo(userId: string): Promise<void> {
+    const mine = await this.findMine(userId);
+    return this.removeLogo(mine.id);
+  }
+
+  /** Quita el QR de Bancolombia (opcional): borra el archivo y limpia la columna. */
+  async removePaymentQr(id: number): Promise<void> {
+    const organizational = await this.findOne(id);
+    const publicId = this._localStorageService.publicIdFromUrl(
+      organizational.bancolombiaQrUrl,
+    );
+    await this._organizationalRepository.update(id, { bancolombiaQrUrl: null });
+    if (publicId) {
+      await this._localStorageService.deleteImage(publicId);
+    }
+  }
+
+  /** QR de Bancolombia del negocio propio (rol NEGO). */
+  async removeMyPaymentQr(userId: string): Promise<void> {
+    const mine = await this.findMine(userId);
+    return this.removePaymentQr(mine.id);
   }
 
   // ---------- helpers ----------

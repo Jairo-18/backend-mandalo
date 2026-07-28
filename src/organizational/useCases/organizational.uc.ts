@@ -55,4 +55,20 @@ export class OrganizationalUC {
   updateMyPaymentQr(userId: string, file: Express.Multer.File) {
     return this._organizationalService.updateMyPaymentQr(userId, file);
   }
+
+  removeLogo(id: number) {
+    return this._organizationalService.removeLogo(id);
+  }
+
+  removeMyLogo(userId: string) {
+    return this._organizationalService.removeMyLogo(userId);
+  }
+
+  removePaymentQr(id: number) {
+    return this._organizationalService.removePaymentQr(id);
+  }
+
+  removeMyPaymentQr(userId: string) {
+    return this._organizationalService.removeMyPaymentQr(userId);
+  }
 }

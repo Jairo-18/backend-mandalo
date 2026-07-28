@@ -60,6 +60,7 @@ import {
   RegisterUserDocs,
   UpdateUserDocs,
   UploadAvatarDocs,
+  RemoveAvatarDocs,
 } from '../decorators/user.decorators';
 
 @Controller('user')
@@ -407,6 +408,18 @@ export class UserController {
     };
   }
 
+  /** Quita la propia foto de perfil (opcional, sin reemplazo). */
+  @Delete('me/avatar')
+  @UseGuards(AuthGuard())
+  @RemoveAvatarDocs()
+  async removeMyAvatar(@GetUser() user: User): Promise<DeleteRecordResponseDto> {
+    await this._userUC.removeAvatar(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de perfil eliminada',
+    };
+  }
+
   /**
    * Registro del token de notificaciones push del dispositivo (lo manda la
    * app al iniciar sesión). Un usuario puede tener varios dispositivos.
@@ -512,6 +525,19 @@ export class UserController {
       statusCode: HttpStatus.OK,
       message: 'Foto de perfil actualizada',
       data,
+    };
+  }
+
+  /** Quita la foto de perfil de un usuario (admin, sin reemplazo). */
+  @Delete(':id/avatar')
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @RemoveAvatarDocs()
+  async removeAvatar(@Param('id') id: string): Promise<DeleteRecordResponseDto> {
+    await this._userUC.removeAvatar(id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de perfil eliminada',
     };
   }
 }

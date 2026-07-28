@@ -44,6 +44,8 @@ import {
   UpdateOrganizationalDocs,
   UploadLogoDocs,
   UploadPaymentQrDocs,
+  RemoveLogoDocs,
+  RemovePaymentQrDocs,
 } from '../decorators/organizational.decorators';
 
 // El CRUD es del panel ADMIN (@Roles por ruta); los endpoints `mine/*` son
@@ -140,6 +142,30 @@ export class OrganizationalController {
     };
   }
 
+  /** Quita el logo del negocio propio (opcional, sin reemplazo). */
+  @Delete('mine/logo')
+  @RemoveLogoDocs()
+  async removeMyLogo(@GetUser() user: User): Promise<DeleteRecordResponseDto> {
+    await this._organizationalUC.removeMyLogo(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Logo eliminado exitosamente',
+    };
+  }
+
+  /** Quita el QR de Bancolombia del negocio propio (opcional, sin reemplazo). */
+  @Delete('mine/payment-qr')
+  @RemovePaymentQrDocs()
+  async removeMyPaymentQr(
+    @GetUser() user: User,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._organizationalUC.removeMyPaymentQr(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'QR de pago eliminado exitosamente',
+    };
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
@@ -199,6 +225,21 @@ export class OrganizationalController {
     };
   }
 
+  /** Quita el logo del negocio (admin, sin reemplazo). */
+  @Delete(':id/logo')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @RemoveLogoDocs()
+  async removeLogo(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._organizationalUC.removeLogo(id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Logo eliminado exitosamente',
+    };
+  }
+
   /** Sube/reemplaza el QR de Bancolombia del negocio (admin). */
   @Post(':id/payment-qr')
   @UseGuards(RolesGuard)
@@ -214,6 +255,21 @@ export class OrganizationalController {
       statusCode: HttpStatus.OK,
       message: 'QR de pago actualizado exitosamente',
       data,
+    };
+  }
+
+  /** Quita el QR de Bancolombia del negocio (admin, sin reemplazo). */
+  @Delete(':id/payment-qr')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @RemovePaymentQrDocs()
+  async removePaymentQr(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._organizationalUC.removePaymentQr(id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'QR de pago eliminado exitosamente',
     };
   }
 }

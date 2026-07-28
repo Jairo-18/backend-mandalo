@@ -77,3 +77,11 @@ export function UploadAvatarDocs() {
     ApiOkResponse(),
   );
 }
+
+export function RemoveAvatarDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({ summary: 'Quitar la foto de perfil (opcional)' }),
+    ApiOkResponse({ type: DeleteRecordResponseDto }),
+  );
+}

@@ -231,7 +231,7 @@ export class UserService {
     // el registro falla por duplicados no quedan archivos huérfanos en disco).
     if (isDelivery && files) {
       const [avatar, idFront, idBack, licenseFront, licenseBack, soat, technicalInspection] =
-        await Promise.all([
+        await this.saveAllOrCleanup([
           this._localStorageService.saveImage(files.avatar![0], 'users'),
           this._localStorageService.saveImage(files.idFront![0], 'users'),
           this._localStorageService.saveImage(files.idBack![0], 'users'),
@@ -609,14 +609,16 @@ export class UserService {
           { id: user.id },
           {
             googleId: profile.googleId,
-            avatarUrl: profile.avatarUrl || user.avatarUrl,
+            // El avatar de Google solo entra si el usuario no tiene foto propia
+            // (si no, se pisa la URL local sin borrar el archivo: queda huérfano).
+            avatarUrl: user.avatarUrl || profile.avatarUrl,
             isEmailVerified: true,
             emailVerificationToken: null,
             emailVerificationTokenExpiry: null,
           },
         );
         user.googleId = profile.googleId;
-        user.avatarUrl = profile.avatarUrl || user.avatarUrl;
+        user.avatarUrl = user.avatarUrl || profile.avatarUrl;
         user.isEmailVerified = true;
         return { user, isNewUser: false };
       }
@@ -677,7 +679,8 @@ export class UserService {
     }
     await this.assertRelationsExist(dto);
 
-    const { password, roleTypeCode, acceptedTerms, ...rest } = dto;
+    // avatarUrl se ignora acá: solo lo toca updateAvatar() (limpia el archivo viejo).
+    const { password, roleTypeCode, acceptedTerms, avatarUrl: _a, ...rest } = dto;
 
     if (roleTypeCode) {
       const roleType = await this._roleTypeRepository.findOne({
@@ -738,7 +741,60 @@ export class UserService {
         'Esta cuenta tiene pedidos en el historial y no se puede eliminar. Desactívala o banéala en su lugar.',
       );
     }
+    await this.deleteUserFiles(user);
     await this._userRepository.delete(user.id);
+  }
+
+  /**
+   * Borra del disco TODOS los archivos subidos de un usuario (avatar +
+   * documentos de repartidor: cédula, licencia, SOAT, tecnomecánica) — se
+   * llama antes de eliminar o anonimizar la cuenta, para no dejar basura
+   * huérfana en el VPS (el puntero en la DB desaparece de todos modos, así
+   * que si no se borra ACÁ ya no queda forma de encontrar el archivo después).
+   */
+  private async deleteUserFiles(user: User): Promise<void> {
+    const urls = [
+      user.avatarUrl,
+      user.identificationFrontUrl,
+      user.identificationBackUrl,
+      user.licenseFrontUrl,
+      user.licenseBackUrl,
+      user.soatUrl,
+      user.technicalInspectionUrl,
+    ];
+    for (const url of urls) {
+      const publicId = this._localStorageService.publicIdFromUrl(url);
+      if (publicId) await this._localStorageService.deleteImage(publicId);
+    }
+  }
+
+  /**
+   * Sube varios archivos en paralelo (registro/onboarding DELI: son 5-7
+   * fotos/documentos). Si alguno falla a mitad de camino, los que sí se
+   * alcanzaron a guardar quedarían huérfanos en disco (nunca se les asigna
+   * URL en la DB) — acá se detecta con `allSettled` y se borran antes de
+   * relanzar el error original.
+   */
+  private async saveAllOrCleanup(
+    tasks: Promise<{ imageUrl: string; publicId: string }>[],
+  ): Promise<{ imageUrl: string; publicId: string }[]> {
+    const results = await Promise.allSettled(tasks);
+    const rejected = results.find(
+      (r): r is PromiseRejectedResult => r.status === 'rejected',
+    );
+    if (rejected) {
+      const fulfilled = results.filter(
+        (r): r is PromiseFulfilledResult<{ imageUrl: string; publicId: string }> =>
+          r.status === 'fulfilled',
+      );
+      for (const r of fulfilled) {
+        await this._localStorageService.deleteImage(r.value.publicId);
+      }
+      throw rejected.reason;
+    }
+    return results.map(
+      (r) => (r as PromiseFulfilledResult<{ imageUrl: string; publicId: string }>).value,
+    );
   }
 
   /**
@@ -768,6 +824,10 @@ export class UserService {
     const businesses = await this._organizationalRepository.count({
       where: { legalPersonId: user.id },
     });
+
+    // Limpia SIEMPRE los archivos del disco antes de eliminar/anonimizar —
+    // ninguna de las dos ramas de abajo debe dejar basura huérfana en el VPS.
+    await this.deleteUserFiles(user);
 
     if (orders === 0 && businesses === 0) {
       await this._userRepository.delete(user.id);
@@ -1015,7 +1075,7 @@ export class UserService {
     }
 
     const [avatar, idFront, idBack, licenseFront, licenseBack, soat, technicalInspection] =
-      await Promise.all([
+      await this.saveAllOrCleanup([
         this._localStorageService.saveImage(files.avatar[0], 'users'),
         this._localStorageService.saveImage(files.idFront[0], 'users'),
         this._localStorageService.saveImage(files.idBack[0], 'users'),
@@ -1092,21 +1152,32 @@ export class UserService {
 
     const updates: Record<string, string | null> = {};
     const oldPublicIds: string[] = [];
+    // Si un archivo falla a mitad del for (varios documentos en una sola
+    // llamada), los que sí se alcanzaron a guardar antes quedarían huérfanos.
+    const newPublicIds: string[] = [];
 
-    for (const [fileKey, column] of [...IMAGE_FIELDS, ...DOCUMENT_FIELDS]) {
-      const file = files?.[fileKey]?.[0];
-      if (!file) continue;
+    try {
+      for (const [fileKey, column] of [...IMAGE_FIELDS, ...DOCUMENT_FIELDS]) {
+        const file = files?.[fileKey]?.[0];
+        if (!file) continue;
 
-      const isDocument = DOCUMENT_FIELDS.some(([key]) => key === fileKey);
-      const { imageUrl } = isDocument
-        ? await this._localStorageService.saveDocument(file, 'users')
-        : await this._localStorageService.saveImage(file, 'users');
+        const isDocument = DOCUMENT_FIELDS.some(([key]) => key === fileKey);
+        const { imageUrl, publicId } = isDocument
+          ? await this._localStorageService.saveDocument(file, 'users')
+          : await this._localStorageService.saveImage(file, 'users');
+        newPublicIds.push(publicId);
 
-      const oldPublicId = this._localStorageService.publicIdFromUrl(
-        user[column] as string | undefined,
-      );
-      if (oldPublicId) oldPublicIds.push(oldPublicId);
-      updates[column] = imageUrl;
+        const oldPublicId = this._localStorageService.publicIdFromUrl(
+          user[column] as string | undefined,
+        );
+        if (oldPublicId) oldPublicIds.push(oldPublicId);
+        updates[column] = imageUrl;
+      }
+    } catch (err) {
+      for (const publicId of newPublicIds) {
+        await this._localStorageService.deleteImage(publicId);
+      }
+      throw err;
     }
 
     if (dto.vehiclePlate?.trim()) {
@@ -1165,6 +1236,16 @@ export class UserService {
     }
 
     return { avatarUrl: imageUrl };
+  }
+
+  /** Quita la foto de perfil (opcional): borra el archivo del disco y limpia la columna. */
+  async removeAvatar(id: string): Promise<void> {
+    const user = await this.findOne(id);
+    const publicId = this._localStorageService.publicIdFromUrl(user.avatarUrl);
+    await this._userRepository.update(id, { avatarUrl: null });
+    if (publicId) {
+      await this._localStorageService.deleteImage(publicId);
+    }
   }
 
   // ---------- helpers ----------

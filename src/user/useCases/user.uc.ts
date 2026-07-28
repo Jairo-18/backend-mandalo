@@ -103,4 +103,8 @@ export class UserUC {
   updateAvatar(id: string, file: Express.Multer.File) {
     return this._userService.updateAvatar(id, file);
   }
+
+  removeAvatar(id: string) {
+    return this._userService.removeAvatar(id);
+  }
 }

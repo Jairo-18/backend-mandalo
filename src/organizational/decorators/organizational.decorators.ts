@@ -109,3 +109,21 @@ export function UploadPaymentQrDocs() {
     ApiOkResponse({ type: UpdateRecordResponseDto }),
   );
 }
+
+export function RemoveLogoDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({ summary: 'Quitar el logo del negocio (opcional)' }),
+    ApiOkResponse({ type: DeleteRecordResponseDto }),
+  );
+}
+
+export function RemovePaymentQrDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary: 'Quitar el QR de Bancolombia del negocio (opcional)',
+    }),
+    ApiOkResponse({ type: DeleteRecordResponseDto }),
+  );
+}

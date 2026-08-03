@@ -27,6 +27,7 @@ import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { isBusinessOpen } from '../../shared/utils/business-hours.util';
 import { PushService } from '../../shared/services/push.service';
 import { DeliveryPricingService } from '../../shared/services/delivery-pricing.service';
+import { WeatherService } from '../../shared/services/weather.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import {
   CreateInvoiceDto,
@@ -60,6 +61,13 @@ const TRANSITIONS: Record<string, { to: StateTypeCode; roles: RoleTypeCode[] }[]
     ],
     [StateTypeCode.ON_ROUTE]: [
       { to: StateTypeCode.DELIVERED, roles: [RoleTypeCode.DELIVERY] },
+      { to: StateTypeCode.DELIVERY_FAILED, roles: [RoleTypeCode.DELIVERY] },
+    ],
+    // Entrega fallida: el CLIENTE decide — reintentar (paga el cargo del
+    // Anexo I, un solo reintento por pedido) o cancelar (Art. 32 TYC).
+    [StateTypeCode.DELIVERY_FAILED]: [
+      { to: StateTypeCode.ON_ROUTE, roles: [RoleTypeCode.CLIENT] },
+      { to: StateTypeCode.CANCELLED, roles: [RoleTypeCode.CLIENT] },
     ],
     [StateTypeCode.DELIVERED]: [],
     [StateTypeCode.CANCELLED]: [],
@@ -80,14 +88,16 @@ export class InvoiceService {
     private readonly _pushService: PushService,
     private readonly _localStorageService: LocalStorageService,
     private readonly _deliveryPricingService: DeliveryPricingService,
+    private readonly _weatherService: WeatherService,
   ) {}
 
   /**
    * Tarifa del domicilio para el checkout: por distancia entre el negocio y
    * la dirección de entrega si hay coordenadas de los dos lados; si falta
-   * alguna, cae a la tarifa fija de respaldo (`APP_DELIVERY_FEE`). De paso
-   * calcula la tarifa de servicio (si mandaron `subtotal`) para que el
-   * checkout arme el total completo con una sola llamada.
+   * alguna, cae a la tarifa fija de respaldo (`APP_DELIVERY_FEE`), sin
+   * recargos (no hay punto de origen que evaluar). De paso calcula la
+   * tarifa de servicio (si mandaron `subtotal`) para que el checkout arme
+   * el total completo con una sola llamada.
    */
   async previewDeliveryFee(params: {
     organizationalId: number;
@@ -96,51 +106,81 @@ export class InvoiceService {
     subtotal?: number;
   }): Promise<{
     deliveryFee: number;
+    deliverySurcharge: number;
+    surchargeReasons: string[];
     distanceKm: number | null;
     serviceFee: number;
   }> {
-    const { deliveryFee, distanceKm } = await this.computeDeliveryFee(
-      params.organizationalId,
-      params.latitude,
-      params.longitude,
-    );
+    const { deliveryFee, deliverySurcharge, surchargeReasons, distanceKm } =
+      await this.computeDeliveryFee(
+        params.organizationalId,
+        params.latitude,
+        params.longitude,
+      );
     return {
       deliveryFee,
+      deliverySurcharge,
+      surchargeReasons,
       distanceKm,
       serviceFee: this.computeServiceFee(params.subtotal ?? 0),
     };
   }
 
   /**
-   * Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
-   * fijo (`APP_SERVICE_FEE_PERCENT`/`APP_SERVICE_FEE_CAP`) — 100% ingreso de
+   * Tarifa de servicio: % del subtotal (SIN domicilio) — 100% ingreso de
    * Mándalo, no toca la comisión del negocio (se calcula sobre el subtotal
    * igual, ver `settlement.service.ts`) ni el corte del repartidor (se
    * calcula sobre `deliveryFee`) porque vive en su propio campo.
+   * `APP_SERVICE_FEE_CAP` en 0 (default) = sin tope, conforme al Art. 38 de
+   * los Términos y Condiciones (NOTAS §59); un valor > 0 vuelve a topar.
    */
   private computeServiceFee(subtotal: number): number {
     const percent =
-      this._configService.get<number>('app.serviceFeePercent') ?? 5;
-    const cap = this._configService.get<number>('app.serviceFeeCap') ?? 5000;
-    return Math.min(this.round2((subtotal * percent) / 100), cap);
+      this._configService.get<number>('app.serviceFeePercent') ?? 7;
+    const cap = this._configService.get<number>('app.serviceFeeCap') ?? 0;
+    const fee = this.round2((subtotal * percent) / 100);
+    return cap > 0 ? Math.min(fee, cap) : fee;
   }
 
   private async computeDeliveryFee(
     organizationalId: number,
     latitude?: number,
     longitude?: number,
-  ): Promise<{ deliveryFee: number; distanceKm: number | null }> {
+  ): Promise<{
+    deliveryFee: number;
+    deliverySurcharge: number;
+    surchargeReasons: string[];
+    distanceKm: number | null;
+  }> {
     const organizational = await this._organizationalRepository.findOne({
       where: { id: organizationalId },
     });
-    return this.deliveryFeeFromOrg(organizational, latitude, longitude);
+    return this.deliveryFeeFromOrg(
+      organizational,
+      organizationalId,
+      latitude,
+      longitude,
+    );
   }
 
-  private deliveryFeeFromOrg(
+  /**
+   * Tarifa base (distancia, con el piso del Anexo I) + recargos (§59 de
+   * NOTAS: nocturno determinístico, clima vía `WeatherService`, demanda
+   * heurística por pedidos sin repartidor en ESTE negocio). Los recargos
+   * solo se evalúan si hay coordenadas del negocio — sin eso ya se cae a la
+   * tarifa fija de respaldo, sin recargos (no hay de dónde calcularlos).
+   */
+  private async deliveryFeeFromOrg(
     organizational: { latitude?: number; longitude?: number } | null,
+    organizationalId: number,
     latitude?: number,
     longitude?: number,
-  ): { deliveryFee: number; distanceKm: number | null } {
+  ): Promise<{
+    deliveryFee: number;
+    deliverySurcharge: number;
+    surchargeReasons: string[];
+    distanceKm: number | null;
+  }> {
     if (
       organizational?.latitude == null ||
       organizational?.longitude == null ||
@@ -149,6 +189,8 @@ export class InvoiceService {
     ) {
       return {
         deliveryFee: this._deliveryPricingService.fallbackFee,
+        deliverySurcharge: 0,
+        surchargeReasons: [],
         distanceKm: null,
       };
     }
@@ -158,10 +200,70 @@ export class InvoiceService {
       latitude,
       longitude,
     );
+    const deliveryFee = this._deliveryPricingService.feeForDistance(distanceKm);
+
+    const surcharges: { amount: number; reason: string }[] = [];
+
+    const nightAmount = this._deliveryPricingService.nightSurchargeAmount();
+    if (nightAmount > 0) {
+      surcharges.push({ amount: nightAmount, reason: 'recargo nocturno' });
+    }
+
+    const isBadWeather = await this._weatherService.isBadWeather(
+      organizational.latitude,
+      organizational.longitude,
+    );
+    if (isBadWeather) {
+      const weatherAmount =
+        this._configService.get<number>('app.deliveryWeatherSurcharge') ?? 0;
+      if (weatherAmount > 0) {
+        surcharges.push({
+          amount: weatherAmount,
+          reason: 'condiciones climáticas',
+        });
+      }
+    }
+
+    const isHighDemand = await this.isHighDemand(organizationalId);
+    if (isHighDemand) {
+      const demandAmount =
+        this._configService.get<number>('app.deliveryDemandSurcharge') ?? 0;
+      if (demandAmount > 0) {
+        surcharges.push({ amount: demandAmount, reason: 'alta demanda' });
+      }
+    }
+
     return {
-      deliveryFee: this._deliveryPricingService.feeForDistance(distanceKm),
+      deliveryFee,
+      deliverySurcharge: this.round2(
+        surcharges.reduce((sum, s) => sum + s.amount, 0),
+      ),
+      surchargeReasons: surcharges.map((s) => s.reason),
       distanceKm: this.round2(distanceKm),
     };
+  }
+
+  /**
+   * Heurística de "alta demanda" (§59 de NOTAS — provisional, no hay
+   * tracking de repartidores conectados todavía): ¿este negocio tiene
+   * `deliveryDemandThreshold` o más pedidos listos (PREP) sin repartidor
+   * asignado ahora mismo? Mismo criterio que alimenta la lista de
+   * "Disponibles" del repartidor (`availableForDelivery`).
+   */
+  private async isHighDemand(organizationalId: number): Promise<boolean> {
+    const threshold =
+      this._configService.get<number>('app.deliveryDemandThreshold') ?? 0;
+    if (threshold <= 0) return false;
+
+    const prepState = await this.resolveState(StateTypeCode.PREPARING);
+    const count = await this._invoiceRepository.count({
+      where: {
+        organizationalId,
+        stateTypeId: prepState.id,
+        deliveryUserId: null,
+      },
+    });
+    return count >= threshold;
   }
 
   // ---------- creación (cliente) ----------
@@ -240,13 +342,16 @@ export class InvoiceService {
     const pendingState = await this.resolveState(StateTypeCode.PENDING);
     // Mismo cálculo por distancia del preview del checkout — se recalcula acá
     // (no se confía en lo que mandó el cliente) para que el cobro sea real.
-    const { deliveryFee } = this.deliveryFeeFromOrg(
+    const { deliveryFee, deliverySurcharge } = await this.deliveryFeeFromOrg(
       organizational,
+      organizational.id,
       address.latitude ?? undefined,
       address.longitude ?? undefined,
     );
     const serviceFee = this.computeServiceFee(subtotal);
-    const total = this.round2(subtotal + deliveryFee + serviceFee);
+    const total = this.round2(
+      subtotal + deliveryFee + deliverySurcharge + serviceFee,
+    );
 
     // Transacción: cabecera + renglones juntos.
     const saved = await this._dataSource.transaction(async (manager) => {
@@ -261,6 +366,7 @@ export class InvoiceService {
         deliveryLongitude: address.longitude ?? null,
         subtotal,
         deliveryFee,
+        deliverySurcharge,
         serviceFee,
         total,
         notes: dto.notes ?? null,
@@ -710,7 +816,14 @@ export class InvoiceService {
 
     // Verificación física de la recogida: el repartidor dicta SU código y el
     // negocio lo digita — prueba que la comida quedó en manos del asignado.
-    if (target === StateTypeCode.ON_ROUTE && invoice.pickupCode) {
+    // Solo aplica en el PRIMER despacho (desde PREP): en un reintento
+    // (desde FALL) el repartidor nunca soltó el paquete, no hay nada que
+    // volver a verificar.
+    if (
+      target === StateTypeCode.ON_ROUTE &&
+      fromCode === StateTypeCode.PREPARING &&
+      invoice.pickupCode
+    ) {
       if (!dto.verificationCode) {
         throw new BadRequestException(
           'Pídele al repartidor su código de recogida para despachar el pedido.',
@@ -721,6 +834,36 @@ export class InvoiceService {
           'Código de recogida incorrecto. Verifícalo con el repartidor.',
         );
       }
+    }
+
+    // Reportar entrega fallida: el repartidor debe indicar el motivo.
+    if (target === StateTypeCode.DELIVERY_FAILED && !dto.failureReason) {
+      throw new BadRequestException(
+        'Indica por qué no se pudo entregar el pedido.',
+      );
+    }
+
+    // Reintento de entrega (Anexo I / Art. 31-32 TYC, NOTAS §59): el cliente
+    // acepta pagar el cargo único del segundo intento. Solo se permite UNA
+    // vez por pedido — si ya se usó, la única salida desde FALL es cancelar.
+    if (
+      target === StateTypeCode.ON_ROUTE &&
+      fromCode === StateTypeCode.DELIVERY_FAILED
+    ) {
+      if (invoice.retryCount >= 1) {
+        throw new BadRequestException(
+          'Ya se usó el único reintento de entrega permitido para este pedido — la única opción ahora es cancelar.',
+        );
+      }
+      const retryFee =
+        this._configService.get<number>('app.deliveryRetryFee') ?? 0;
+      invoice.retryCount += 1;
+      invoice.retryFeeCharged = retryFee;
+      invoice.retryAcceptedAt = new Date();
+      invoice.deliverySurcharge = this.round2(
+        (invoice.deliverySurcharge ?? 0) + retryFee,
+      );
+      invoice.total = this.round2(invoice.total + retryFee);
     }
 
     // Verificación física de la entrega: el cliente dicta SU código y el
@@ -832,6 +975,10 @@ export class InvoiceService {
         invoice.onRouteAt = now;
         invoice.deliveryEstimatedMinutes = this.estimateDeliveryMinutes(invoice);
         break;
+      case StateTypeCode.DELIVERY_FAILED:
+        invoice.deliveryFailedAt = now;
+        invoice.deliveryFailReason = dto.failureReason ?? null;
+        break;
       case StateTypeCode.DELIVERED:
         invoice.deliveredAt = now;
         break;
@@ -939,8 +1086,25 @@ export class InvoiceService {
         break;
       case StateTypeCode.ON_ROUTE:
         void this._pushService.sendToUsers([invoice.userId], {
-          title: `¡Tu pedido ${num} va en camino! 🛵`,
-          body: 'El repartidor va hacia tu dirección. Ten a mano tu código de entrega.',
+          title:
+            invoice.retryCount > 0
+              ? `Reintento en camino 🛵 — pedido ${num}`
+              : `¡Tu pedido ${num} va en camino! 🛵`,
+          body:
+            invoice.retryCount > 0
+              ? 'El repartidor va de nuevo hacia tu dirección.'
+              : 'El repartidor va hacia tu dirección. Ten a mano tu código de entrega.',
+          data,
+        });
+        break;
+      case StateTypeCode.DELIVERY_FAILED:
+        // El repartidor no pudo entregar: el cliente decide reintentar
+        // (pagando el cargo del Anexo I) o cancelar.
+        void this._pushService.sendToUsers([invoice.userId], {
+          title: `No pudimos entregar tu pedido ${num} ⚠️`,
+          body: invoice.deliveryFailReason
+            ? `Motivo: ${invoice.deliveryFailReason}. Abre el pedido para reintentar o cancelar.`
+            : 'Abre el pedido para reintentar la entrega o cancelarlo.',
           data,
         });
         break;

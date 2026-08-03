@@ -36,8 +36,10 @@ export const config = async () => {
       // `deliveryExtraKmRate`, de lo cual `deliveryExtraMandaloRate`% es para
       // Mándalo y el resto para el repartidor. Toda la plata del domicilio se
       // reparte entre Mándalo y el repartidor — el negocio no la toca.
+      // Defaults alineados al Anexo I de los Términos y Condiciones (TYC-001,
+      // NOTAS §59): radio base 4km, tarifa base $6.000, $3.000/km extra.
       deliveryBaseKm:
-        parseFloat(process.env.APP_DELIVERY_BASE_KM as string) || 2,
+        parseFloat(process.env.APP_DELIVERY_BASE_KM as string) || 4,
       deliveryBaseFee:
         parseFloat(process.env.APP_DELIVERY_BASE_FEE as string) || 6000,
       deliveryBaseMandaloCut:
@@ -48,6 +50,39 @@ export const config = async () => {
       deliveryExtraMandaloRate:
         parseFloat(process.env.APP_DELIVERY_EXTRA_MANDALO_RATE as string) ||
         16,
+      // Tarifa mínima del Anexo I (§59): piso absoluto del valor del
+      // domicilio (base + km extra), antes de sumar recargos. 0 = sin piso.
+      deliveryMinFee:
+        parseFloat(process.env.APP_DELIVERY_MIN_FEE as string) || 10000,
+      // Recargo nocturno del Anexo I (§59): aplica entre 11:00pm y 5:30am,
+      // hora de Bogotá. 100% para el repartidor (no se reparte con Mándalo,
+      // mismo criterio que el resto de la tarifa base que le queda al
+      // repartidor una vez descontado `deliveryBaseMandaloCut`).
+      deliveryNightSurcharge:
+        parseFloat(process.env.APP_DELIVERY_NIGHT_SURCHARGE as string) ||
+        4500,
+      // Recargo por condiciones climáticas del Anexo I (§59): se activa si
+      // Open-Meteo reporta lluvia/tormenta EN VIVO en las coordenadas del
+      // negocio (WeatherService, caché de 15 min — ver NOTAS §59, decisión
+      // provisional: quién se lo queda, ver deliveryNightSurcharge arriba).
+      deliveryWeatherSurcharge:
+        parseFloat(process.env.APP_DELIVERY_WEATHER_SURCHARGE as string) ||
+        2500,
+      // Recargo por alta demanda del Anexo I (§59): heurística provisional
+      // (NOTAS §59, no hay tracking de repartidores conectados todavía) —
+      // se activa si el negocio tiene `deliveryDemandThreshold` o más pedidos
+      // en PREP sin repartidor asignado al momento del cálculo.
+      deliveryDemandSurcharge:
+        parseFloat(process.env.APP_DELIVERY_DEMAND_SURCHARGE as string) ||
+        2500,
+      deliveryDemandThreshold:
+        parseInt(process.env.APP_DELIVERY_DEMAND_THRESHOLD as string, 10) ||
+        3,
+      // Segundo intento de entrega del Anexo I (§59, Art. 31/32 TYC): cargo
+      // único (un solo reintento por pedido) cuando el cliente decide
+      // reintentar tras una entrega fallida. 100% para el repartidor.
+      deliveryRetryFee:
+        parseFloat(process.env.APP_DELIVERY_RETRY_FEE as string) || 6000,
       // Comisión por defecto del NEGOCIO sobre lo vendido (subtotal) — cada
       // negocio guarda SU propia tasa (organizational.commissionOrderRate,
       // editable por el admin); esto solo sirve de default al crear uno nuevo.
@@ -55,12 +90,14 @@ export const config = async () => {
         parseFloat(process.env.APP_DEFAULT_COMMISSION_ORDER_RATE as string) ||
         5,
       // Tarifa de servicio que se le cobra al CLIENTE encima del subtotal
-      // (SIN domicilio): `serviceFeePercent`% del subtotal, topado en
-      // `serviceFeeCap` COP — 100% ingreso de Mándalo (no se reparte con el
-      // negocio ni el repartidor, a diferencia de subtotal/deliveryFee).
+      // (SIN domicilio): `serviceFeePercent`% del subtotal, 100% ingreso de
+      // Mándalo (no se reparte con el negocio ni el repartidor, a diferencia
+      // de subtotal/deliveryFee). `serviceFeeCap` en 0 = sin tope — así lo
+      // exige el Anexo I / Art. 38 de los Términos y Condiciones (7% sin
+      // tope, NOTAS §59); se deja configurable por si se vuelve a topar.
       serviceFeePercent:
-        parseFloat(process.env.APP_SERVICE_FEE_PERCENT as string) || 5,
-      serviceFeeCap: parseFloat(process.env.APP_SERVICE_FEE_CAP as string) || 5000,
+        parseFloat(process.env.APP_SERVICE_FEE_PERCENT as string) || 7,
+      serviceFeeCap: parseFloat(process.env.APP_SERVICE_FEE_CAP as string) || 0,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

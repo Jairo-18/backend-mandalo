@@ -129,6 +129,17 @@ export class UpdateInvoiceStateDto {
   @IsString()
   @MaxLength(4)
   verificationCode?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Motivo por el que no se pudo entregar (obligatorio al pasar a FALL, ' +
+      'lo indica el repartidor)',
+    example: 'Nadie respondió en la dirección tras varios intentos de contacto.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  failureReason?: string;
 }
 
 /**

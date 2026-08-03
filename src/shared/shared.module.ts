@@ -8,6 +8,7 @@ import { MailsService } from './services/mails.service';
 import { MailTemplateService } from './services/mail-template.service';
 import { PushService } from './services/push.service';
 import { DeliveryPricingService } from './services/delivery-pricing.service';
+import { WeatherService } from './services/weather.service';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from './entities/user.entity';
 import { AccessSessions } from './entities/accessSessions.entity';
@@ -155,6 +156,7 @@ export class SharedModule {
         MailTemplateService,
         PushService,
         DeliveryPricingService,
+        WeatherService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -184,6 +186,7 @@ export class SharedModule {
         MailTemplateService,
         PushService,
         DeliveryPricingService,
+        WeatherService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,

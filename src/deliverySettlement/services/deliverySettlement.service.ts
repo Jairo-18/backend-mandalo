@@ -316,6 +316,7 @@ export class DeliverySettlementService {
       .innerJoin('invoice.stateType', 'stateType')
       .select(`to_char(${bucketExpr}, 'YYYY-MM-DD')`, 'periodStart')
       .addSelect('invoice."deliveryFee"', 'deliveryFee')
+      .addSelect('invoice."deliverySurcharge"', 'deliverySurcharge')
       .where('invoice."deliveryUserId" = :uid', { uid: deliveryUserId })
       .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
       .andWhere('invoice."deliveredAt" IS NOT NULL');
@@ -324,7 +325,11 @@ export class DeliverySettlementService {
       query.andWhere(`${bucketExpr} = to_date(:onlyStart, 'YYYY-MM-DD')`, { onlyStart });
     }
 
-    const rows = await query.getRawMany<{ periodStart: string; deliveryFee: string }>();
+    const rows = await query.getRawMany<{
+      periodStart: string;
+      deliveryFee: string;
+      deliverySurcharge: string;
+    }>();
 
     const byStart = new Map<
       string,
@@ -332,14 +337,17 @@ export class DeliverySettlementService {
     >();
     for (const row of rows) {
       const fee = parseFloat(row.deliveryFee);
+      // Recargos del Anexo I (nocturno/clima/demanda/reintento, §59 de
+      // NOTAS) — 100% para el repartidor, no pasan por `splitFee()`.
+      const surcharge = parseFloat(row.deliverySurcharge ?? '0') || 0;
       const split = this._deliveryPricingService.splitFee(fee);
       const acc =
         byStart.get(row.periodStart) ??
         { ordersCount: 0, deliveryTotal: 0, mandaloCut: 0, riderCut: 0 };
       acc.ordersCount += 1;
-      acc.deliveryTotal += fee;
+      acc.deliveryTotal += fee + surcharge;
       acc.mandaloCut += split.mandaloCut;
-      acc.riderCut += split.riderCut;
+      acc.riderCut += split.riderCut + surcharge;
       byStart.set(row.periodStart, acc);
     }
 

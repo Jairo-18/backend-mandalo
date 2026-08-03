@@ -10,6 +10,7 @@ export class CronJobService {
 
   private isBackupRunning = false;
   private isCleanupRunning = false;
+  private lastBackupSucceeded = true;
 
   constructor(
     private readonly _backupUC: BackupUC,
@@ -28,10 +29,12 @@ export class CronJobService {
     this.isBackupRunning = true;
     try {
       await this._backupUC.performBackupAndUpload();
+      this.lastBackupSucceeded = true;
       this.logger.log(
         `[${new Date().toISOString()}] Backup generado y subido a Google Drive correctamente`,
       );
     } catch (error) {
+      this.lastBackupSucceeded = false;
       this.logger.error(`Backup fallido: ${error.message}`, error.stack);
     } finally {
       this.isBackupRunning = false;
@@ -45,6 +48,13 @@ export class CronJobService {
     if (this.isCleanupRunning) {
       this.logger.warn(
         'Limpieza de backups ya en ejecución, se omite esta iteración',
+      );
+      return;
+    }
+
+    if (!this.lastBackupSucceeded) {
+      this.logger.warn(
+        'El último backup falló, se omite la limpieza para no quedar sin backups',
       );
       return;
     }

@@ -85,7 +85,7 @@ export class PaginatedProductsParamsDto extends ParamsPaginationDto {
 export class RemoveProductImageDto {
   @ApiProperty({
     description: 'URL de la imagen a quitar del producto',
-    example: 'https://apimandalo.ecohotelsamawe.com/uploads/products/uuid.webp',
+    example: 'https://apidev.somosmandalo.com/uploads/products/uuid.webp',
   })
   @IsString()
   @IsNotEmpty()

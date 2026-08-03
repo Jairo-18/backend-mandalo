@@ -98,6 +98,18 @@ export class Invoice {
   })
   deliveryFee: number;
 
+  // Recargos del Anexo I (nocturno + clima + alta demanda al crear, más el
+  // cargo de segundo intento si se acepta después) — SEPARADO de
+  // `deliveryFee` porque es 100% para el repartidor, no pasa por el
+  // reparto base/extra de `DeliveryPricingService.splitFee()`.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  deliverySurcharge: number;
+
   // Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
   // fijo (APP_SERVICE_FEE_PERCENT/APP_SERVICE_FEE_CAP) — 100% ingreso de
   // Mándalo, no toca la comisión del negocio ni el corte del repartidor.
@@ -166,6 +178,31 @@ export class Invoice {
 
   @Column('timestamptz', { nullable: true })
   cancelledAt?: Date | null;
+
+  // ---- Segundo intento de entrega (Anexo I / Art. 31-32, NOTAS §59) ----
+  // Motivo que da el REPARTIDOR al reportar que no pudo entregar.
+  @Column('varchar', { length: 255, nullable: true })
+  deliveryFailReason?: string | null;
+
+  @Column('timestamptz', { nullable: true })
+  deliveryFailedAt?: Date | null;
+
+  // Cuántas veces se reintentó (tope 1, validado en el service).
+  @Column('int', { default: 0 })
+  retryCount: number;
+
+  // Cuánto se cobró por el reintento (0 = nunca se reintentó) — informativo,
+  // ya sumado dentro de `deliverySurcharge`/`total`.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  retryFeeCharged: number;
+
+  @Column('timestamptz', { nullable: true })
+  retryAcceptedAt?: Date | null;
 
   // Minutos de preparación que el NEGOCIO promete al aceptar el pedido
   @Column('int', { nullable: true })

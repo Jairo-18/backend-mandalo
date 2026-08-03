@@ -8,6 +8,7 @@ export enum StateTypeCode {
   ACCEPTED = 'ACEP', // Aceptado por el negocio
   PREPARING = 'PREP', // En preparación
   ON_ROUTE = 'RUTA', // En ruta (el repartidor lo recogió)
+  DELIVERY_FAILED = 'FALL', // Entrega fallida — esperando decisión del cliente (reintento o cancelar)
   DELIVERED = 'ENTR', // Entregado
   CANCELLED = 'CANC', // Cancelado
 }

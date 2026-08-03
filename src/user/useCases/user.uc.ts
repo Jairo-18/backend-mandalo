@@ -3,6 +3,7 @@ import { RegisterDeliveryFiles, UserService } from '../services/user.service';
 import { CrudUserService } from '../services/crudUser.service';
 import {
   BecomeDeliveryDto,
+  BusinessLeadDto,
   ChangeMyPasswordDto,
   CreateUserDto,
   RegisterUserDto,
@@ -94,6 +95,10 @@ export class UserUC {
 
   requestDeletionByEmail(email: string) {
     return this._userService.requestDeletionByEmail(email);
+  }
+
+  sendBusinessLead(dto: BusinessLeadDto) {
+    return this._userService.sendBusinessLead(dto);
   }
 
   confirmDeletionByToken(userId: string, token: string) {

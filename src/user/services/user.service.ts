@@ -18,6 +18,7 @@ import { User } from '../../shared/entities/user.entity';
 import { NOT_FOUND_MESSAGE } from '../../shared/constants/messages.constant';
 import {
   BecomeDeliveryDto,
+  BusinessLeadDto,
   CreateUserDto,
   RegisterUserDto,
   ResendDeliveryDocumentsDto,
@@ -36,6 +37,7 @@ const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
 const PASSWORD_RESET_CODE_MINUTES = 15;
 const DELETION_TOKEN_MINUTES = 30;
+const BUSINESS_CONTACT_EMAIL = 'mandaloputumayo@gmail.com';
 
 export interface GoogleUserProfile {
   googleId: string;
@@ -931,6 +933,33 @@ export class UserService {
           message:
             'No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.',
           code: 'DELETION_EMAIL_FAILED',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+  }
+
+  /**
+   * Formulario "¿Tienes un negocio?" del registro (antes era un `mailto:`
+   * que abría el correo del dispositivo): manda los datos directo al equipo
+   * de Mándalo. `replyTo` con el correo del negocio si lo dejó, para que
+   * responder el correo vaya directo a él.
+   */
+  async sendBusinessLead(dto: BusinessLeadDto): Promise<void> {
+    try {
+      await this._mailsService.sendEmail({
+        to: BUSINESS_CONTACT_EMAIL,
+        subject: `Nuevo negocio interesado: ${dto.businessName}`,
+        body: this._mailTemplateService.businessLeadTemplate(dto),
+        replyTo: dto.contactEmail,
+      });
+    } catch (error) {
+      console.error('Error sending business lead email:', error);
+      throw new HttpException(
+        {
+          message:
+            'No pudimos enviar tu solicitud. Inténtalo de nuevo en unos minutos.',
+          code: 'BUSINESS_LEAD_EMAIL_FAILED',
         },
         HttpStatus.SERVICE_UNAVAILABLE,
       );

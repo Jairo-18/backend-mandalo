@@ -27,6 +27,7 @@ import { UserUC } from '../useCases/user.uc';
 import { RegisterDeliveryFiles } from '../services/user.service';
 import {
   BecomeDeliveryDto,
+  BusinessLeadDto,
   ChangeMyPasswordDto,
   CreateUserDto,
   PushTokenDto,
@@ -219,6 +220,24 @@ export class UserController {
       message:
         '¡Registro exitoso! Verifica tu correo. Un administrador revisará tus datos y activará tu cuenta de repartidor.',
       data: { rowId: user.id },
+    };
+  }
+
+  /**
+   * Formulario "¿Tienes un negocio?" del registro: en vez de abrir el correo
+   * del dispositivo (`mailto:`), manda los datos directo al equipo de
+   * Mándalo. Sin cuenta todavía — los negocios no se auto-registran.
+   */
+  @Post('business-lead')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async businessLead(
+    @Body() body: BusinessLeadDto,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.sendBusinessLead(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: '¡Listo! Te contactaremos pronto.',
     };
   }
 

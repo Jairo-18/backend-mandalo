@@ -203,6 +203,71 @@ export class MailTemplateService {
   }
 
   /**
+   * Correo al equipo de Mándalo con los datos de un negocio interesado en
+   * registrarse (formulario de "¿Tienes un negocio?" en /auth/register —
+   * antes era un `mailto:` que abría el correo del dispositivo).
+   */
+  businessLeadTemplate(lead: {
+    businessName: string;
+    ownerName: string;
+    phone: string;
+    contactEmail?: string;
+    identificationNumber?: string;
+    businessType: string;
+    municipalityAddress: string;
+  }) {
+    const row = (label: string, value?: string) =>
+      value
+        ? `
+                    <tr>
+                      <td style="padding: 8px 0; color: ${BRAND.muted}; font-size: 13px; width: 42%; vertical-align: top;">${label}</td>
+                      <td style="padding: 8px 0; color: ${BRAND.dark}; font-size: 14px; font-weight: 600; vertical-align: top;">${value}</td>
+                    </tr>`
+        : '';
+    return `
+      <div style="margin: 0; padding: 0; background-color: ${BRAND.surface}; font-family: 'Helvetica', Arial, sans-serif; width: 100%;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${BRAND.surface}; padding: 40px 10px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 520px; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background-color: ${BRAND.primary}; height: 6px;"></td>
+                </tr>
+                <tr>
+                  <td style="padding: 40px 30px;">
+                    <div style="text-align: center; margin-bottom: 25px;">
+                      <h1 style="color: ${BRAND.primary}; margin: 0; font-size: 30px; font-weight: 800;">${BRAND.name}</h1>
+                      <p style="color: ${BRAND.muted}; margin: 4px 0 0; font-size: 11px; letter-spacing: 2px; font-weight: 700;">${BRAND.slogan}</p>
+                      <h2 style="color: ${BRAND.dark}; margin: 25px 0 0; font-size: 20px; font-weight: 700;">Nuevo negocio interesado</h2>
+                    </div>
+                    <p style="color: ${BRAND.muted}; font-size: 14px; line-height: 20px; margin-bottom: 20px;">
+                      Alguien llenó el formulario "¿Tienes un negocio?" desde la app. Estos son sus datos:
+                    </p>
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid ${BRAND.surface};">
+                      ${row('Negocio', lead.businessName)}
+                      ${row('Titular / representante', lead.ownerName)}
+                      ${row('Tipo de negocio', lead.businessType)}
+                      ${row('Municipio y dirección', lead.municipalityAddress)}
+                      ${row('Teléfono', lead.phone)}
+                      ${row('Correo de contacto', lead.contactEmail)}
+                      ${row('NIT / cédula', lead.identificationNumber)}
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: ${BRAND.dark}; padding: 18px 30px; text-align: center;">
+                    <p style="color: #ffffff; font-size: 12px; margin: 0;">© ${BRAND.name} — ${BRAND.slogan}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
    * Página HTML que ve el usuario al abrir el enlace de "eliminar mi cuenta"
    * (mismo patrón que `verifyEmailResultPage`).
    */

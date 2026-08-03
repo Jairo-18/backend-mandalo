@@ -413,6 +413,55 @@ export class RequestAccountDeletionDto {
   email: string;
 }
 
+/**
+ * Formulario "¿Tienes un negocio?" del registro: en vez de abrir el correo
+ * del dispositivo (`mailto:`), manda estos datos directo al equipo de
+ * Mándalo por correo. Sin cuenta todavía — los negocios no se auto-registran.
+ */
+export class BusinessLeadDto {
+  @ApiProperty({ example: 'Donde el Mono' })
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre del negocio es requerido' })
+  @MaxLength(150)
+  businessName: string;
+
+  @ApiProperty({ example: 'Juan Pérez' })
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre del titular es requerido' })
+  @MaxLength(100)
+  ownerName: string;
+
+  @ApiProperty({ example: '3001234567' })
+  @IsString()
+  @IsNotEmpty({ message: 'El teléfono es requerido' })
+  @MaxLength(20)
+  phone: string;
+
+  @ApiPropertyOptional({ example: 'tucorreo@gmail.com' })
+  @IsOptional()
+  @IsEmail({}, { message: 'El correo no es válido' })
+  @MaxLength(150)
+  contactEmail?: string;
+
+  @ApiPropertyOptional({ example: '1127077851' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  identificationNumber?: string;
+
+  @ApiProperty({ example: 'Restaurante / comida rápida' })
+  @IsString()
+  @IsNotEmpty({ message: 'El tipo de negocio es requerido' })
+  @MaxLength(100)
+  businessType: string;
+
+  @ApiProperty({ example: 'Villagarzón, Putumayo — Cll 10 Cr 3-14' })
+  @IsString()
+  @IsNotEmpty({ message: 'El municipio y la dirección son requeridos' })
+  @MaxLength(200)
+  municipalityAddress: string;
+}
+
 /** Token de notificaciones push del dispositivo (lo emite Expo en la app). */
 export class PushTokenDto {
   @ApiProperty({ example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]' })

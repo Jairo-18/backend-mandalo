@@ -10,7 +10,13 @@ export class MailsService {
     private readonly _configService: ConfigService,
   ) {}
 
-  async sendEmail({ from, to, subject, body }: SendEmailOptions): Promise<void> {
+  async sendEmail({
+    from,
+    to,
+    subject,
+    body,
+    replyTo,
+  }: SendEmailOptions): Promise<void> {
     if (!to) {
       throw new HttpException(
         'No recipient email provided',
@@ -22,6 +28,7 @@ export class MailsService {
       to,
       subject,
       html: body,
+      replyTo,
     });
   }
 }

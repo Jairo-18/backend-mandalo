@@ -87,7 +87,7 @@ export class UserController {
   ): Promise<void> {
     let success = true;
     let message =
-      'Tu correo fue verificado. Ya puedes iniciar sesión en la app de Mándalo.';
+      'Tu correo fue verificado. Ya puedes iniciar sesión en la app de Mandalo.';
 
     if (!token || !userId) {
       success = false;
@@ -142,7 +142,7 @@ export class UserController {
     @Res() res: Response,
   ): Promise<void> {
     let success = true;
-    let message = 'Tu cuenta y tus datos fueron eliminados de Mándalo.';
+    let message = 'Tu cuenta y tus datos fueron eliminados de Mandalo.';
 
     if (!token || !userId) {
       success = false;
@@ -342,7 +342,7 @@ export class UserController {
     await this._userUC.acceptTerms(user.id);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Gracias por aceptar. ¡Bienvenid@ a Mándalo!',
+      message: 'Gracias por aceptar. ¡Bienvenid@ a Mandalo!',
     };
   }
 

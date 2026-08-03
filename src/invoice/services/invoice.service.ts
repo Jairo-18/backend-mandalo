@@ -1111,7 +1111,7 @@ export class InvoiceService {
       case StateTypeCode.DELIVERED:
         void this._pushService.sendToUsers([invoice.userId], {
           title: `Pedido ${num} entregado 🎉`,
-          body: '¡Gracias por pedir en Mándalo!',
+          body: '¡Gracias por pedir en Mandalo!',
           data,
         });
         break;

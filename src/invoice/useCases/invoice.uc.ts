@@ -40,6 +40,28 @@ export class InvoiceUC {
     return this._invoiceService.take(user, id);
   }
 
+  arrive(user: User, id: number) {
+    return this._invoiceService.arrive(user, id);
+  }
+
+  retryAfterTimeout(user: User, id: number) {
+    return this._invoiceService.retryAfterTimeout(user, id);
+  }
+
+  reportDeliveryFailure(
+    user: User,
+    id: number,
+    file: Express.Multer.File,
+    failureReason: string,
+  ) {
+    return this._invoiceService.reportDeliveryFailure(
+      user,
+      id,
+      file,
+      failureReason,
+    );
+  }
+
   changeState(user: User, id: number, dto: UpdateInvoiceStateDto) {
     return this._invoiceService.changeState(user, id, dto);
   }

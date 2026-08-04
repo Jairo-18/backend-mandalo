@@ -26,6 +26,12 @@ interface QuincenaTotals {
   deliveryTotal: number;
   mandaloCut: number;
   riderCut: number;
+  /** Desglose del corte del repartidor (reunión 2026-08-04, "control estricto"): tripTotal = solo el viaje (base+km), sin recargos. */
+  tripTotal: number;
+  nightTotal: number;
+  weatherTotal: number;
+  demandTotal: number;
+  retryTotal: number;
 }
 
 /** Fila que ve el admin: quincena (pagable) o mes/año (resumen). */
@@ -37,6 +43,12 @@ export interface DeliverySettlementPeriodItem {
   deliveryTotal: number;
   mandaloCut: number;
   riderCut: number;
+  /** Desglose de `riderCut` por concepto — igual en admin y en "Mis cobros" del repartidor. */
+  tripTotal: number;
+  nightTotal: number;
+  weatherTotal: number;
+  demandTotal: number;
+  retryTotal: number;
   /** Solo quincena: el pago real (se marca/desmarca). Null en mes/año. */
   settlement: {
     id: number;
@@ -183,6 +195,11 @@ export class DeliverySettlementService {
               deliveryTotal: 0,
               mandaloCut: 0,
               riderCut: 0,
+              tripTotal: 0,
+              nightTotal: 0,
+              weatherTotal: 0,
+              demandTotal: 0,
+              retryTotal: 0,
             },
             settlement,
           ),
@@ -205,6 +222,11 @@ export class DeliverySettlementService {
       deliveryTotal: row.deliveryTotal,
       mandaloCut: row.mandaloCut,
       riderCut: row.riderCut,
+      tripTotal: row.tripTotal,
+      nightTotal: row.nightTotal,
+      weatherTotal: row.weatherTotal,
+      demandTotal: row.demandTotal,
+      retryTotal: row.retryTotal,
       settlement: settlement
         ? {
             id: settlement.id,
@@ -224,20 +246,48 @@ export class DeliverySettlementService {
     quincenas: DeliverySettlementPeriodItem[],
     granularity: 'month' | 'year',
   ): DeliverySettlementPeriodItem[] {
+    type Acc = {
+      orders: number;
+      delivery: number;
+      mandalo: number;
+      rider: number;
+      trip: number;
+      night: number;
+      weather: number;
+      demand: number;
+      retry: number;
+      paid: number;
+      total: number;
+    };
+    const emptyAcc = (): Acc => ({
+      orders: 0,
+      delivery: 0,
+      mandalo: 0,
+      rider: 0,
+      trip: 0,
+      night: 0,
+      weather: 0,
+      demand: 0,
+      retry: 0,
+      paid: 0,
+      total: 0,
+    });
+
     if (granularity === 'year') {
       const months = this.rollUp(quincenas, 'month');
-      const byYear = new Map<
-        string,
-        { orders: number; delivery: number; mandalo: number; rider: number; paid: number; total: number }
-      >();
+      const byYear = new Map<string, Acc>();
       for (const m of months) {
         const year = m.periodStart.slice(0, 4);
-        const acc =
-          byYear.get(year) ?? { orders: 0, delivery: 0, mandalo: 0, rider: 0, paid: 0, total: 0 };
+        const acc = byYear.get(year) ?? emptyAcc();
         acc.orders += m.ordersCount;
         acc.delivery += m.deliveryTotal;
         acc.mandalo += m.mandaloCut;
         acc.rider += m.riderCut;
+        acc.trip += m.tripTotal;
+        acc.night += m.nightTotal;
+        acc.weather += m.weatherTotal;
+        acc.demand += m.demandTotal;
+        acc.retry += m.retryTotal;
         acc.total += 1;
         if (m.paidSubperiods === m.totalSubperiods && (m.totalSubperiods ?? 0) > 0) acc.paid += 1;
         byYear.set(year, acc);
@@ -254,6 +304,11 @@ export class DeliverySettlementService {
             deliveryTotal: this.round2(acc.delivery),
             mandaloCut: this.round2(acc.mandalo),
             riderCut: this.round2(acc.rider),
+            tripTotal: this.round2(acc.trip),
+            nightTotal: this.round2(acc.night),
+            weatherTotal: this.round2(acc.weather),
+            demandTotal: this.round2(acc.demand),
+            retryTotal: this.round2(acc.retry),
             settlement: null,
             paidSubperiods: acc.paid,
             totalSubperiods: acc.total,
@@ -261,18 +316,19 @@ export class DeliverySettlementService {
         });
     }
 
-    const byMonth = new Map<
-      string,
-      { orders: number; delivery: number; mandalo: number; rider: number; paid: number; total: number }
-    >();
+    const byMonth = new Map<string, Acc>();
     for (const q of quincenas) {
       const month = q.periodStart.slice(0, 7);
-      const acc =
-        byMonth.get(month) ?? { orders: 0, delivery: 0, mandalo: 0, rider: 0, paid: 0, total: 0 };
+      const acc = byMonth.get(month) ?? emptyAcc();
       acc.orders += q.ordersCount;
       acc.delivery += q.deliveryTotal;
       acc.mandalo += q.mandaloCut;
       acc.rider += q.riderCut;
+      acc.trip += q.tripTotal;
+      acc.night += q.nightTotal;
+      acc.weather += q.weatherTotal;
+      acc.demand += q.demandTotal;
+      acc.retry += q.retryTotal;
       acc.total += 1;
       if (q.settlement?.isPaid) acc.paid += 1;
       byMonth.set(month, acc);
@@ -289,6 +345,11 @@ export class DeliverySettlementService {
           deliveryTotal: this.round2(acc.delivery),
           mandaloCut: this.round2(acc.mandalo),
           riderCut: this.round2(acc.rider),
+          tripTotal: this.round2(acc.trip),
+          nightTotal: this.round2(acc.night),
+          weatherTotal: this.round2(acc.weather),
+          demandTotal: this.round2(acc.demand),
+          retryTotal: this.round2(acc.retry),
           settlement: null,
           paidSubperiods: acc.paid,
           totalSubperiods: acc.total,
@@ -317,6 +378,10 @@ export class DeliverySettlementService {
       .select(`to_char(${bucketExpr}, 'YYYY-MM-DD')`, 'periodStart')
       .addSelect('invoice."deliveryFee"', 'deliveryFee')
       .addSelect('invoice."deliverySurcharge"', 'deliverySurcharge')
+      .addSelect('invoice."nightSurcharge"', 'nightSurcharge')
+      .addSelect('invoice."weatherSurcharge"', 'weatherSurcharge')
+      .addSelect('invoice."demandSurcharge"', 'demandSurcharge')
+      .addSelect('invoice."retryFeeCharged"', 'retryFeeCharged')
       .where('invoice."deliveryUserId" = :uid', { uid: deliveryUserId })
       .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
       .andWhere('invoice."deliveredAt" IS NOT NULL');
@@ -329,25 +394,58 @@ export class DeliverySettlementService {
       periodStart: string;
       deliveryFee: string;
       deliverySurcharge: string;
+      nightSurcharge: string;
+      weatherSurcharge: string;
+      demandSurcharge: string;
+      retryFeeCharged: string;
     }>();
 
     const byStart = new Map<
       string,
-      { ordersCount: number; deliveryTotal: number; mandaloCut: number; riderCut: number }
+      {
+        ordersCount: number;
+        deliveryTotal: number;
+        mandaloCut: number;
+        riderCut: number;
+        tripTotal: number;
+        nightTotal: number;
+        weatherTotal: number;
+        demandTotal: number;
+        retryTotal: number;
+      }
     >();
     for (const row of rows) {
       const fee = parseFloat(row.deliveryFee);
-      // Recargos del Anexo I (nocturno/clima/demanda/reintento, §59 de
-      // NOTAS) — 100% para el repartidor, no pasan por `splitFee()`.
+      // Recargos (reunión 2026-08-04, desglose por tipo) — 100% para el
+      // repartidor, no pasan por `splitFee()`.
+      const night = parseFloat(row.nightSurcharge ?? '0') || 0;
+      const weather = parseFloat(row.weatherSurcharge ?? '0') || 0;
+      const demand = parseFloat(row.demandSurcharge ?? '0') || 0;
+      const retry = parseFloat(row.retryFeeCharged ?? '0') || 0;
       const surcharge = parseFloat(row.deliverySurcharge ?? '0') || 0;
       const split = this._deliveryPricingService.splitFee(fee);
       const acc =
         byStart.get(row.periodStart) ??
-        { ordersCount: 0, deliveryTotal: 0, mandaloCut: 0, riderCut: 0 };
+        {
+          ordersCount: 0,
+          deliveryTotal: 0,
+          mandaloCut: 0,
+          riderCut: 0,
+          tripTotal: 0,
+          nightTotal: 0,
+          weatherTotal: 0,
+          demandTotal: 0,
+          retryTotal: 0,
+        };
       acc.ordersCount += 1;
       acc.deliveryTotal += fee + surcharge;
       acc.mandaloCut += split.mandaloCut;
       acc.riderCut += split.riderCut + surcharge;
+      acc.tripTotal += split.riderCut;
+      acc.nightTotal += night;
+      acc.weatherTotal += weather;
+      acc.demandTotal += demand;
+      acc.retryTotal += retry;
       byStart.set(row.periodStart, acc);
     }
 
@@ -359,6 +457,11 @@ export class DeliverySettlementService {
         deliveryTotal: this.round2(acc.deliveryTotal),
         mandaloCut: this.round2(acc.mandaloCut),
         riderCut: this.round2(acc.riderCut),
+        tripTotal: this.round2(acc.tripTotal),
+        nightTotal: this.round2(acc.nightTotal),
+        weatherTotal: this.round2(acc.weatherTotal),
+        demandTotal: this.round2(acc.demandTotal),
+        retryTotal: this.round2(acc.retryTotal),
       }));
   }
 

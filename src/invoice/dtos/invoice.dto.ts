@@ -18,6 +18,22 @@ import { Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 
+/**
+ * Reporte de entrega fallida (multipart, foto obligatoria — reunión
+ * 2026-08-04): el front arma `failureReason` combinando el motivo elegido +
+ * observaciones libres.
+ */
+export class ReportDeliveryFailureDto {
+  @ApiProperty({
+    example: 'No estaba en la dirección — Observaciones: nadie respondió.',
+    maxLength: 500,
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Indica por qué no se pudo entregar el pedido' })
+  @MaxLength(500)
+  failureReason: string;
+}
+
 /** Motivo por el que el negocio rechaza el comprobante de pago del cliente. */
 export class RejectPaymentDto {
   @ApiProperty({
@@ -133,12 +149,12 @@ export class UpdateInvoiceStateDto {
   @ApiPropertyOptional({
     description:
       'Motivo por el que no se pudo entregar (obligatorio al pasar a FALL, ' +
-      'lo indica el repartidor)',
-    example: 'Nadie respondió en la dirección tras varios intentos de contacto.',
+      'lo arma el front con el motivo elegido + observaciones libres)',
+    example: 'No estaba — Observaciones: nadie respondió tras varios intentos.',
   })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @MaxLength(500)
   failureReason?: string;
 }
 

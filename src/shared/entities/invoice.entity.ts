@@ -110,6 +110,34 @@ export class Invoice {
   })
   deliverySurcharge: number;
 
+  // Desglose de `deliverySurcharge` por tipo (reunión con el cliente
+  // 2026-08-04, "control estricto" en cobros del repartidor/admin) — estas 3
+  // más `retryFeeCharged` (ya existía, ver abajo) SIEMPRE deben sumar
+  // `deliverySurcharge`.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  nightSurcharge: number;
+
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  weatherSurcharge: number;
+
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  demandSurcharge: number;
+
   // Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
   // fijo (APP_SERVICE_FEE_PERCENT/APP_SERVICE_FEE_CAP) — 100% ingreso de
   // Mándalo, no toca la comisión del negocio ni el corte del repartidor.
@@ -173,6 +201,12 @@ export class Invoice {
   @Column('timestamptz', { nullable: true })
   onRouteAt?: Date | null;
 
+  // El repartidor marca "En sitio" al llegar a la dirección de entrega
+  // (reunión 2026-08-04) — arranca la espera antes de habilitar el segundo
+  // intento pagado. Se reinicia si se usa `retryAfterTimeout`.
+  @Column('timestamptz', { nullable: true })
+  arrivedAt?: Date | null;
+
   @Column('timestamptz', { nullable: true })
   deliveredAt?: Date | null;
 
@@ -180,9 +214,15 @@ export class Invoice {
   cancelledAt?: Date | null;
 
   // ---- Segundo intento de entrega (Anexo I / Art. 31-32, NOTAS §59) ----
-  // Motivo que da el REPARTIDOR al reportar que no pudo entregar.
-  @Column('varchar', { length: 255, nullable: true })
+  // Motivo que da el REPARTIDOR al reportar que no pudo entregar (select +
+  // observaciones libres combinados por el front, reunión 2026-08-04).
+  @Column('varchar', { length: 500, nullable: true })
   deliveryFailReason?: string | null;
+
+  // Foto obligatoria del sitio/paquete al reportar (reunión 2026-08-04) —
+  // evidencia para resolver reclamos.
+  @Column('varchar', { length: 500, nullable: true })
+  deliveryFailPhotoUrl?: string | null;
 
   @Column('timestamptz', { nullable: true })
   deliveryFailedAt?: Date | null;

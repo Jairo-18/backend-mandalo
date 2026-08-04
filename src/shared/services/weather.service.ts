@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 type CacheEntry = { isBad: boolean; expiresAt: number };
 
 /**
- * Clima EN VIVO para el recargo del Anexo I (§59 de NOTAS): Open-Meteo,
- * gratis y sin API key (https://open-meteo.com), consultado por coordenadas.
- * "Mal clima" = precipitación actual > 0 (lluvia/tormenta en curso).
+ * Clima EN VIVO para el recargo del Anexo I: Open-Meteo, gratis y sin API
+ * key (https://open-meteo.com), consultado por coordenadas. "Mal clima" =
+ * LLUVIA FUERTE (reunión con el cliente 2026-08-04: no cualquier lluvia,
+ * solo cuando `current.precipitation` de la última hora >= `weatherHeavyRainMm`).
  *
  * Caché en memoria de 15 minutos por coordenada redondeada a 2 decimales
  * (~1.1km) — evita golpear la API en cada preview del checkout; el dato deja
@@ -20,6 +22,8 @@ export class WeatherService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly CACHE_TTL_MS = 15 * 60 * 1000;
   private readonly TIMEOUT_MS = 2500;
+
+  constructor(private readonly _configService: ConfigService) {}
 
   async isBadWeather(latitude: number, longitude: number): Promise<boolean> {
     const key = `${latitude.toFixed(2)},${longitude.toFixed(2)}`;
@@ -37,7 +41,9 @@ export class WeatherService {
       const data = (await res.json()) as {
         current?: { precipitation?: number };
       };
-      const isBad = (data.current?.precipitation ?? 0) > 0;
+      const heavyRainMm =
+        this._configService.get<number>('app.weatherHeavyRainMm') ?? 7.5;
+      const isBad = (data.current?.precipitation ?? 0) >= heavyRainMm;
       this.cache.set(key, { isBad, expiresAt: Date.now() + this.CACHE_TTL_MS });
       return isBad;
     } catch (error) {

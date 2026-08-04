@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, Matches } from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 const HEX_COLOR_MESSAGE = 'Debe ser un color hex válido, ej: #FF5A3C';
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
@@ -65,4 +65,20 @@ export class UpdateAppSettingsDto {
   @IsOptional()
   @Matches(HEX_COLOR_REGEX, { message: HEX_COLOR_MESSAGE })
   borderDarkColor?: string;
+
+  @ApiPropertyOptional({
+    description: 'ARL global — cubre a todos los repartidores',
+    example: 'Positiva ARL',
+    maxLength: 150,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  arlCompanyName?: string;
+
+  @ApiPropertyOptional({ example: 'POL-123456', maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  arlPolicyNumber?: string;
 }

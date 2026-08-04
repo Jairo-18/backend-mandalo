@@ -6,7 +6,12 @@ import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 
 /** Subcarpetas lógicas de /uploads (una por tipo de imagen). */
-export type UploadFolder = 'users' | 'organizational' | 'products' | 'payments';
+export type UploadFolder =
+  | 'users'
+  | 'organizational'
+  | 'products'
+  | 'payments'
+  | 'delivery-failures';
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const DOCUMENT_MIME_TYPES = [...IMAGE_MIME_TYPES, 'application/pdf'];

@@ -52,6 +52,15 @@ export class AppSettings {
   @Column('varchar', { length: 7, default: '#33334A' })
   borderDarkColor: string;
 
+  // ARL global (reunión con el cliente 2026-08-04): la póliza que cubre a
+  // TODOS los repartidores — el admin la carga una sola vez y se le muestra
+  // a cualquiera que reporte un accidente.
+  @Column('varchar', { length: 150, nullable: true })
+  arlCompanyName?: string | null;
+
+  @Column('varchar', { length: 80, nullable: true })
+  arlPolicyNumber?: string | null;
+
   @UpdateDateColumn({ type: 'timestamp', nullable: true })
   updatedAt?: Date;
 }

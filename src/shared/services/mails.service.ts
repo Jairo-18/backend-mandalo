@@ -28,7 +28,25 @@ export class MailsService {
       to,
       subject,
       html: body,
+      text: htmlToPlainText(body),
       replyTo,
     });
   }
+}
+
+/**
+ * Los filtros de spam penalizan los correos que solo traen `html` sin una
+ * versión de texto plano (`multipart/alternative` es la señal esperada) —
+ * no hace falta una conversión perfecta, solo que exista.
+ */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

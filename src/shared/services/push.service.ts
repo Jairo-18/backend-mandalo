@@ -109,6 +109,29 @@ export class PushService {
     }
   }
 
+  /** Push a todos los ADMIN (ej. un repartidor reporta un accidente). */
+  async sendToAdmins(notification: PushNotification): Promise<void> {
+    try {
+      const tokens = await this._pushTokenRepository
+        .createQueryBuilder('pushToken')
+        .innerJoin('user', 'u', 'u."id" = "pushToken"."userId"')
+        .innerJoin(
+          'roleType',
+          'rt',
+          'rt."id" = u."roleTypeId" AND rt."code" = :code',
+          { code: RoleTypeCode.ADMIN },
+        )
+        .where('u."isActive" = true AND u."isBanned" = false')
+        .getMany();
+      await this.deliver(
+        tokens.map((t) => t.token),
+        notification,
+      );
+    } catch (error) {
+      this.logger.warn(`Push a admins falló: ${(error as Error).message}`);
+    }
+  }
+
   // ---------- helpers ----------
 
   private async deliver(

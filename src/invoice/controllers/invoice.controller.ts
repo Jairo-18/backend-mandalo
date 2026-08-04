@@ -21,6 +21,7 @@ import {
   DeliveryFeePreviewParamsDto,
   PaginatedInvoicesParamsDto,
   RejectPaymentDto,
+  ReportDeliveryFailureDto,
   UpdateInvoiceStateDto,
 } from '../dtos/invoice.dto';
 import {
@@ -123,6 +124,63 @@ export class InvoiceController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Tomaste el pedido. ¡En marcha!',
+    };
+  }
+
+  /**
+   * El repartidor marca que llegó a la dirección de entrega (obligatorio
+   * antes de poder marcar entregado). Avisa al cliente por socket + push.
+   */
+  @Post(':id/arrive')
+  async arrive(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._invoiceUC.arrive(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Marcaste que llegaste. Se avisó al cliente.',
+    };
+  }
+
+  /**
+   * "¿Deseas esperar 5 minutos más?" — cliente o repartidor, cuando ya
+   * pasaron los minutos de espera desde "En sitio" sin completar la
+   * entrega. Cobra el segundo intento y reinicia el cronómetro.
+   */
+  @Post(':id/retry-after-timeout')
+  async retryAfterTimeout(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._invoiceUC.retryAfterTimeout(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Se dieron minutos extra de espera.',
+    };
+  }
+
+  /**
+   * El repartidor reporta que NO PUDO entregar: motivo + foto obligatoria
+   * del sitio/paquete. Único camino a FALL (ver TRANSITIONS en el service).
+   */
+  @Post(':id/report-failure')
+  @UseInterceptors(FileInterceptor('photo'))
+  async reportDeliveryFailure(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ReportDeliveryFailureDto,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._invoiceUC.reportDeliveryFailure(
+      user,
+      id,
+      file,
+      body.failureReason,
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Reportamos que no se pudo entregar. El cliente decidirá.',
     };
   }
 

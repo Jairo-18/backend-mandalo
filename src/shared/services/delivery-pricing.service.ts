@@ -63,9 +63,10 @@ export class DeliveryPricingService {
   }
 
   /**
-   * Tarifa del domicilio (lo que paga el cliente) para una distancia dada,
-   * con el piso de `deliveryMinFee` del Anexo I (§59 de NOTAS) — ningún
-   * servicio cuesta menos que eso, ni siquiera dentro del radio base.
+   * Tarifa del domicilio (lo que paga el cliente) para una distancia dada.
+   * La propia tarifa base YA es el mínimo del servicio (reunión con el
+   * cliente 2026-08-04) — `deliveryMinFee` queda en 0 por defecto (inerte);
+   * solo entra en juego si algún día se vuelve a pedir un piso aparte.
    */
   feeForDistance(distanceKm: number): number {
     const raw =

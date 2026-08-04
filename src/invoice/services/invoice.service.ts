@@ -37,6 +37,22 @@ import {
 import { InvoiceGateway } from '../invoice.gateway';
 
 /**
+ * Tarifa del domicilio + desglose de recargos por tipo (reunión con el
+ * cliente 2026-08-04: "control estricto" en Mis cobros/admin). Las 3 columnas
+ * de recargo SIEMPRE deben sumar `deliverySurcharge`; `surchargeReasons` es
+ * el texto amigable para el preview del checkout.
+ */
+export interface DeliveryFeeBreakdown {
+  deliveryFee: number;
+  deliverySurcharge: number;
+  nightSurcharge: number;
+  weatherSurcharge: number;
+  demandSurcharge: number;
+  surchargeReasons: string[];
+  distanceKm: number | null;
+}
+
+/**
  * Transiciones permitidas del pedido: de qué estado, a qué estado y qué rol
  * puede hacerlo. El repartidor además solo mueve pedidos que TOMÓ (se valida
  * aparte). Ver el flujo en §22 de NOTAS.
@@ -59,9 +75,10 @@ const TRANSITIONS: Record<string, { to: StateTypeCode; roles: RoleTypeCode[] }[]
       { to: StateTypeCode.ON_ROUTE, roles: [RoleTypeCode.BUSINESS] },
       { to: StateTypeCode.CANCELLED, roles: [RoleTypeCode.BUSINESS] },
     ],
+    // A FALL solo se llega por `reportDeliveryFailure` (foto obligatoria,
+    // reunión 2026-08-04) — no es una transición genérica de `changeState`.
     [StateTypeCode.ON_ROUTE]: [
       { to: StateTypeCode.DELIVERED, roles: [RoleTypeCode.DELIVERY] },
-      { to: StateTypeCode.DELIVERY_FAILED, roles: [RoleTypeCode.DELIVERY] },
     ],
     // Entrega fallida: el CLIENTE decide — reintentar (paga el cargo del
     // Anexo I, un solo reintento por pedido) o cancelar (Art. 32 TYC).
@@ -104,24 +121,14 @@ export class InvoiceService {
     latitude?: number;
     longitude?: number;
     subtotal?: number;
-  }): Promise<{
-    deliveryFee: number;
-    deliverySurcharge: number;
-    surchargeReasons: string[];
-    distanceKm: number | null;
-    serviceFee: number;
-  }> {
-    const { deliveryFee, deliverySurcharge, surchargeReasons, distanceKm } =
-      await this.computeDeliveryFee(
-        params.organizationalId,
-        params.latitude,
-        params.longitude,
-      );
+  }): Promise<DeliveryFeeBreakdown & { serviceFee: number }> {
+    const breakdown = await this.computeDeliveryFee(
+      params.organizationalId,
+      params.latitude,
+      params.longitude,
+    );
     return {
-      deliveryFee,
-      deliverySurcharge,
-      surchargeReasons,
-      distanceKm,
+      ...breakdown,
       serviceFee: this.computeServiceFee(params.subtotal ?? 0),
     };
   }
@@ -136,7 +143,7 @@ export class InvoiceService {
    */
   private computeServiceFee(subtotal: number): number {
     const percent =
-      this._configService.get<number>('app.serviceFeePercent') ?? 7;
+      this._configService.get<number>('app.serviceFeePercent') ?? 5;
     const cap = this._configService.get<number>('app.serviceFeeCap') ?? 0;
     const fee = this.round2((subtotal * percent) / 100);
     return cap > 0 ? Math.min(fee, cap) : fee;
@@ -146,41 +153,25 @@ export class InvoiceService {
     organizationalId: number,
     latitude?: number,
     longitude?: number,
-  ): Promise<{
-    deliveryFee: number;
-    deliverySurcharge: number;
-    surchargeReasons: string[];
-    distanceKm: number | null;
-  }> {
+  ): Promise<DeliveryFeeBreakdown> {
     const organizational = await this._organizationalRepository.findOne({
       where: { id: organizationalId },
     });
-    return this.deliveryFeeFromOrg(
-      organizational,
-      organizationalId,
-      latitude,
-      longitude,
-    );
+    return this.deliveryFeeFromOrg(organizational, latitude, longitude);
   }
 
   /**
-   * Tarifa base (distancia, con el piso del Anexo I) + recargos (§59 de
-   * NOTAS: nocturno determinístico, clima vía `WeatherService`, demanda
-   * heurística por pedidos sin repartidor en ESTE negocio). Los recargos
-   * solo se evalúan si hay coordenadas del negocio — sin eso ya se cae a la
-   * tarifa fija de respaldo, sin recargos (no hay de dónde calcularlos).
+   * Tarifa base (distancia) + recargos (reunión con el cliente 2026-08-04:
+   * nocturno determinístico, clima vía `WeatherService` con umbral de lluvia
+   * fuerte, demanda GLOBAL de toda la app). Los recargos solo se evalúan si
+   * hay coordenadas del negocio — sin eso ya se cae a la tarifa fija de
+   * respaldo, sin recargos (no hay de dónde calcularlos).
    */
   private async deliveryFeeFromOrg(
     organizational: { latitude?: number; longitude?: number } | null,
-    organizationalId: number,
     latitude?: number,
     longitude?: number,
-  ): Promise<{
-    deliveryFee: number;
-    deliverySurcharge: number;
-    surchargeReasons: string[];
-    distanceKm: number | null;
-  }> {
+  ): Promise<DeliveryFeeBreakdown> {
     if (
       organizational?.latitude == null ||
       organizational?.longitude == null ||
@@ -190,6 +181,9 @@ export class InvoiceService {
       return {
         deliveryFee: this._deliveryPricingService.fallbackFee,
         deliverySurcharge: 0,
+        nightSurcharge: 0,
+        weatherSurcharge: 0,
+        demandSurcharge: 0,
         surchargeReasons: [],
         distanceKm: null,
       };
@@ -202,55 +196,52 @@ export class InvoiceService {
     );
     const deliveryFee = this._deliveryPricingService.feeForDistance(distanceKm);
 
-    const surcharges: { amount: number; reason: string }[] = [];
+    const nightSurcharge = this._deliveryPricingService.nightSurchargeAmount();
 
-    const nightAmount = this._deliveryPricingService.nightSurchargeAmount();
-    if (nightAmount > 0) {
-      surcharges.push({ amount: nightAmount, reason: 'recargo nocturno' });
-    }
-
+    let weatherSurcharge = 0;
     const isBadWeather = await this._weatherService.isBadWeather(
       organizational.latitude,
       organizational.longitude,
     );
     if (isBadWeather) {
-      const weatherAmount =
+      weatherSurcharge =
         this._configService.get<number>('app.deliveryWeatherSurcharge') ?? 0;
-      if (weatherAmount > 0) {
-        surcharges.push({
-          amount: weatherAmount,
-          reason: 'condiciones climáticas',
-        });
-      }
     }
 
-    const isHighDemand = await this.isHighDemand(organizationalId);
+    let demandSurcharge = 0;
+    const isHighDemand = await this.isHighDemand();
     if (isHighDemand) {
-      const demandAmount =
+      demandSurcharge =
         this._configService.get<number>('app.deliveryDemandSurcharge') ?? 0;
-      if (demandAmount > 0) {
-        surcharges.push({ amount: demandAmount, reason: 'alta demanda' });
-      }
     }
+
+    const surchargeReasons: string[] = [];
+    if (nightSurcharge > 0) surchargeReasons.push('recargo nocturno');
+    if (weatherSurcharge > 0) surchargeReasons.push('condiciones climáticas');
+    if (demandSurcharge > 0) surchargeReasons.push('alta demanda');
 
     return {
       deliveryFee,
       deliverySurcharge: this.round2(
-        surcharges.reduce((sum, s) => sum + s.amount, 0),
+        nightSurcharge + weatherSurcharge + demandSurcharge,
       ),
-      surchargeReasons: surcharges.map((s) => s.reason),
+      nightSurcharge: this.round2(nightSurcharge),
+      weatherSurcharge: this.round2(weatherSurcharge),
+      demandSurcharge: this.round2(demandSurcharge),
+      surchargeReasons,
       distanceKm: this.round2(distanceKm),
     };
   }
 
   /**
-   * Heurística de "alta demanda" (§59 de NOTAS — provisional, no hay
-   * tracking de repartidores conectados todavía): ¿este negocio tiene
-   * `deliveryDemandThreshold` o más pedidos listos (PREP) sin repartidor
-   * asignado ahora mismo? Mismo criterio que alimenta la lista de
-   * "Disponibles" del repartidor (`availableForDelivery`).
+   * "Alta demanda" GLOBAL (reunión con el cliente 2026-08-04: no por
+   * negocio — toda la app): ¿hay `deliveryDemandThreshold` o más pedidos
+   * listos (PREP) sin repartidor asignado ahora mismo, en cualquier
+   * negocio? Mismo criterio de estado que alimenta la lista de
+   * "Disponibles" del repartidor (`availableForDelivery`), pero sin filtrar
+   * por negocio.
    */
-  private async isHighDemand(organizationalId: number): Promise<boolean> {
+  private async isHighDemand(): Promise<boolean> {
     const threshold =
       this._configService.get<number>('app.deliveryDemandThreshold') ?? 0;
     if (threshold <= 0) return false;
@@ -258,7 +249,6 @@ export class InvoiceService {
     const prepState = await this.resolveState(StateTypeCode.PREPARING);
     const count = await this._invoiceRepository.count({
       where: {
-        organizationalId,
         stateTypeId: prepState.id,
         deliveryUserId: null,
       },
@@ -342,9 +332,14 @@ export class InvoiceService {
     const pendingState = await this.resolveState(StateTypeCode.PENDING);
     // Mismo cálculo por distancia del preview del checkout — se recalcula acá
     // (no se confía en lo que mandó el cliente) para que el cobro sea real.
-    const { deliveryFee, deliverySurcharge } = await this.deliveryFeeFromOrg(
+    const {
+      deliveryFee,
+      deliverySurcharge,
+      nightSurcharge,
+      weatherSurcharge,
+      demandSurcharge,
+    } = await this.deliveryFeeFromOrg(
       organizational,
-      organizational.id,
       address.latitude ?? undefined,
       address.longitude ?? undefined,
     );
@@ -367,6 +362,9 @@ export class InvoiceService {
         subtotal,
         deliveryFee,
         deliverySurcharge,
+        nightSurcharge,
+        weatherSurcharge,
+        demandSurcharge,
         serviceFee,
         total,
         notes: dto.notes ?? null,
@@ -507,6 +505,7 @@ export class InvoiceService {
     params: PaginatedInvoicesParamsDto,
   ): Promise<ResponsePaginationDto<Invoice>> {
     this.assertRole(user, RoleTypeCode.DELIVERY);
+    this.assertHasArl(user);
 
     const page = params.page ?? 1;
     const perPage = params.perPage ?? 10;
@@ -566,6 +565,7 @@ export class InvoiceService {
 
   async take(user: User, id: number): Promise<Invoice> {
     this.assertRole(user, RoleTypeCode.DELIVERY);
+    this.assertHasArl(user);
     const prepState = await this.resolveState(StateTypeCode.PREPARING);
 
     // Claim atómico: solo lo toma si sigue disponible (evita carrera entre
@@ -603,6 +603,146 @@ export class InvoiceService {
     void this._pushService.sendToUsers([full.userId], {
       title: `Pedido #${full.id}`,
       body: 'Un repartidor tomó tu pedido. Pronto saldrá en camino.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+    return this.hideCodesFor(user, full);
+  }
+
+  // ---------- en sitio / segundo intento por tiempo (reunión 2026-08-04) ----------
+
+  /**
+   * El repartidor marca que llegó a la dirección de entrega — obligatorio
+   * antes de poder "Marcar entregado" (ver guard en `changeState`). Arranca
+   * la espera de `deliveryWaitMinutes` antes de habilitar el segundo intento
+   * pagado. No cambia el estado del pedido (sigue en RUTA).
+   */
+  async arrive(user: User, id: number): Promise<Invoice> {
+    this.assertRole(user, RoleTypeCode.DELIVERY);
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+    if (invoice.deliveryUserId !== user.id) {
+      throw new ForbiddenException(
+        'Solo puedes gestionar pedidos que hayas tomado.',
+      );
+    }
+    if (invoice.stateType?.code !== StateTypeCode.ON_ROUTE) {
+      throw new BadRequestException(
+        'Solo puedes marcar "En sitio" mientras el pedido está en camino.',
+      );
+    }
+    if (invoice.arrivedAt) {
+      throw new BadRequestException('Ya marcaste que llegaste a este pedido.');
+    }
+
+    invoice.arrivedAt = new Date();
+    await this._invoiceRepository.save(invoice);
+
+    const full = await this.findByIdWithRelations(id);
+    this._gateway.emitToUser(full.userId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+    });
+    this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+    });
+    void this._pushService.sendToUsers([full.userId], {
+      title: `Pedido #${full.id} — tu repartidor llegó 🛵`,
+      body: 'Sal a recibirlo y dale tu código de entrega.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+    return this.hideCodesFor(user, full);
+  }
+
+  /**
+   * "¿Deseas esperar 5 minutos más?" — se habilita cuando pasan
+   * `deliveryWaitMinutes` desde `arrivedAt` sin que se complete la entrega.
+   * Lo puede pedir el CLIENTE o el REPARTIDOR. Cobra el cargo único del
+   * segundo intento (Anexo I) y reinicia el cronómetro — el pedido sigue en
+   * RUTA todo el tiempo (nunca pasa visiblemente por FALL). Tope de un solo
+   * uso por pedido, compartido con el reintento manual desde FALL
+   * (`invoice.retryCount`).
+   */
+  async retryAfterTimeout(user: User, id: number): Promise<Invoice> {
+    const roleCode = user.roleType?.code;
+    if (
+      roleCode !== RoleTypeCode.CLIENT &&
+      roleCode !== RoleTypeCode.DELIVERY
+    ) {
+      throw new ForbiddenException('No puedes hacer esto.');
+    }
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+    if (roleCode === RoleTypeCode.CLIENT && invoice.userId !== user.id) {
+      throw new ForbiddenException('Este pedido no es tuyo.');
+    }
+    if (
+      roleCode === RoleTypeCode.DELIVERY &&
+      invoice.deliveryUserId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'Solo puedes gestionar pedidos que hayas tomado.',
+      );
+    }
+    if (invoice.stateType?.code !== StateTypeCode.ON_ROUTE) {
+      throw new BadRequestException('El pedido no está en camino.');
+    }
+    if (!invoice.arrivedAt) {
+      throw new BadRequestException(
+        'El repartidor todavía no ha marcado "En sitio".',
+      );
+    }
+    const waitMinutes =
+      this._configService.get<number>('app.deliveryWaitMinutes') ?? 5;
+    const elapsedMs = Date.now() - invoice.arrivedAt.getTime();
+    if (elapsedMs < waitMinutes * 60_000) {
+      throw new BadRequestException(
+        `Todavía no pasan los ${waitMinutes} minutos de espera.`,
+      );
+    }
+    if (invoice.retryCount >= 1) {
+      throw new BadRequestException(
+        'Ya se usó el único segundo intento permitido para este pedido.',
+      );
+    }
+
+    const retryFee =
+      this._configService.get<number>('app.deliveryRetryFee') ?? 0;
+    invoice.retryCount += 1;
+    invoice.retryFeeCharged = retryFee;
+    invoice.retryAcceptedAt = new Date();
+    invoice.deliverySurcharge = this.round2(
+      (invoice.deliverySurcharge ?? 0) + retryFee,
+    );
+    invoice.total = this.round2(invoice.total + retryFee);
+    // Reinicia el cronómetro — el repartidor sigue ahí, no hace falta que
+    // vuelva a marcar "En sitio".
+    invoice.arrivedAt = new Date();
+    await this._invoiceRepository.save(invoice);
+
+    const full = await this.findByIdWithRelations(id);
+    this._gateway.emitToUser(full.userId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+    });
+    if (full.deliveryUserId) {
+      this._gateway.emitToDelivery(full.deliveryUserId, 'invoice:updated', {
+        ...full,
+        deliveryCode: null,
+      });
+    }
+    this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+    });
+    const recipients = [full.userId, full.deliveryUserId].filter(
+      (v): v is string => !!v,
+    );
+    void this._pushService.sendToUsers(recipients, {
+      title: `Pedido #${full.id} — segundo intento`,
+      body: `Se dieron ${waitMinutes} minutos más de espera (cargo de $${retryFee.toLocaleString('es-CO')}).`,
       data: { type: 'order', invoiceId: full.id },
     });
     return this.hideCodesFor(user, full);
@@ -836,13 +976,6 @@ export class InvoiceService {
       }
     }
 
-    // Reportar entrega fallida: el repartidor debe indicar el motivo.
-    if (target === StateTypeCode.DELIVERY_FAILED && !dto.failureReason) {
-      throw new BadRequestException(
-        'Indica por qué no se pudo entregar el pedido.',
-      );
-    }
-
     // Reintento de entrega (Anexo I / Art. 31-32 TYC, NOTAS §59): el cliente
     // acepta pagar el cargo único del segundo intento. Solo se permite UNA
     // vez por pedido — si ya se usó, la única salida desde FALL es cancelar.
@@ -864,6 +997,14 @@ export class InvoiceService {
         (invoice.deliverySurcharge ?? 0) + retryFee,
       );
       invoice.total = this.round2(invoice.total + retryFee);
+    }
+
+    // Marcar entregado exige haber marcado "En sitio" antes (reunión
+    // 2026-08-04) — fuerza el orden real: llegar primero, entregar después.
+    if (target === StateTypeCode.DELIVERED && !invoice.arrivedAt) {
+      throw new BadRequestException(
+        'Primero marca "En sitio" al llegar a la dirección de entrega.',
+      );
     }
 
     // Verificación física de la entrega: el cliente dicta SU código y el
@@ -919,6 +1060,67 @@ export class InvoiceService {
     const full = await this.findByIdWithRelations(id);
     this.broadcastStateChange(full, target);
     this.pushStateChange(full, target, roleCode);
+    return this.hideCodesFor(user, full);
+  }
+
+  /**
+   * El repartidor reporta que NO PUDO entregar (Art. 31-32 TYC): motivo +
+   * FOTO OBLIGATORIA del sitio/paquete (reunión 2026-08-04, evidencia para
+   * resolver reclamos). Es el ÚNICO camino a FALL — no está en `TRANSITIONS`
+   * a propósito, para que la foto no se pueda saltar llamando `changeState`
+   * directo. El pedido queda esperando que el CLIENTE decida reintentar o
+   * cancelar.
+   */
+  async reportDeliveryFailure(
+    user: User,
+    id: number,
+    file: Express.Multer.File,
+    failureReason: string,
+  ): Promise<Invoice> {
+    this.assertRole(user, RoleTypeCode.DELIVERY);
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+    if (invoice.deliveryUserId !== user.id) {
+      throw new ForbiddenException(
+        'Solo puedes gestionar pedidos que hayas tomado.',
+      );
+    }
+    if (invoice.stateType?.code !== StateTypeCode.ON_ROUTE) {
+      throw new BadRequestException(
+        'Solo puedes reportar esto mientras el pedido está en camino.',
+      );
+    }
+    if (!failureReason?.trim()) {
+      throw new BadRequestException(
+        'Indica por qué no se pudo entregar el pedido.',
+      );
+    }
+    if (!file) {
+      throw new BadRequestException(
+        'Toma una foto del sitio o del paquete para reportar la entrega fallida.',
+      );
+    }
+
+    const { imageUrl } = await this._localStorageService.saveImage(
+      file,
+      'delivery-failures',
+    );
+
+    const failedState = await this.resolveState(StateTypeCode.DELIVERY_FAILED);
+    invoice.stateTypeId = failedState.id;
+    invoice.stateType = failedState;
+    invoice.deliveryFailedAt = new Date();
+    invoice.deliveryFailReason = failureReason.trim();
+    invoice.deliveryFailPhotoUrl = imageUrl;
+    await this._invoiceRepository.save(invoice);
+
+    const full = await this.findByIdWithRelations(id);
+    this.broadcastStateChange(full, StateTypeCode.DELIVERY_FAILED);
+    this.pushStateChange(
+      full,
+      StateTypeCode.DELIVERY_FAILED,
+      RoleTypeCode.DELIVERY,
+    );
     return this.hideCodesFor(user, full);
   }
 
@@ -1224,6 +1426,19 @@ export class InvoiceService {
   private assertRole(user: User, role: RoleTypeCode): void {
     if (user.roleType?.code !== role) {
       throw new ForbiddenException('No tienes permiso para esta acción.');
+    }
+  }
+
+  /**
+   * Sin número de ARL asignado, el repartidor no puede ver ni tomar pedidos
+   * disponibles — aunque su cuenta esté activa (reunión con el cliente
+   * 2026-08-04). Lo asigna el admin desde su panel.
+   */
+  private assertHasArl(user: User): void {
+    if (!user.arlIndividualNumber) {
+      throw new ForbiddenException(
+        'Aún no tienes asignado tu número de ARL. El administrador debe asignarlo antes de que puedas ver pedidos.',
+      );
     }
   }
 

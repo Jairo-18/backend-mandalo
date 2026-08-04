@@ -50,6 +50,8 @@ import { BusinessSettlementRepository } from './repositories/businessSettlement.
 import { DeliverySettlementRepository } from './repositories/deliverySettlement.repository';
 import { AppSettings } from './entities/appSettings.entity';
 import { AppSettingsRepository } from './repositories/appSettings.repository';
+import { DeliveryAccident } from './entities/deliveryAccident.entity';
+import { DeliveryAccidentRepository } from './repositories/deliveryAccident.repository';
 
 @Module({})
 export class SharedModule {
@@ -117,6 +119,7 @@ export class SharedModule {
           BusinessSettlement,
           DeliverySettlement,
           AppSettings,
+          DeliveryAccident,
         ]),
 
         PassportModule,
@@ -143,6 +146,12 @@ export class SharedModule {
                 user: configService.get<string>('MAIL_USER'),
                 pass: configService.get<string>('MAIL_PASSWORD'),
               },
+              // Gmail marca como sospechoso el envío en ráfaga desde una
+              // cuenta personal; se limita a 1 correo/segundo por conexión.
+              pool: true,
+              maxConnections: 1,
+              rateDelta: 1000,
+              rateLimit: 1,
             },
             defaults: {
               from: configService.get<string>('MAIL_SENDER'),
@@ -177,6 +186,7 @@ export class SharedModule {
         BusinessSettlementRepository,
         DeliverySettlementRepository,
         AppSettingsRepository,
+        DeliveryAccidentRepository,
       ],
       exports: [
         JwtModule,
@@ -207,6 +217,7 @@ export class SharedModule {
         BusinessSettlementRepository,
         DeliverySettlementRepository,
         AppSettingsRepository,
+        DeliveryAccidentRepository,
       ],
     };
   }

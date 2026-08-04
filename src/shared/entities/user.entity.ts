@@ -124,6 +124,11 @@ export class User {
   @Column('text', { nullable: true })
   observations?: string;
 
+  // Número de afiliado ARL propio del repartidor (reunión 2026-08-04) — lo
+  // asigna el admin, distinto de la póliza global de `appSettings`.
+  @Column('varchar', { length: 80, nullable: true })
+  arlIndividualNumber?: string | null;
+
   // Aceptación de Términos y Condiciones + Política de Tratamiento de Datos
   // (Habeas Data). `termsVersion` guarda QUÉ versión aceptó (permite pedir
   // re-aceptación si el texto cambia materialmente más adelante).

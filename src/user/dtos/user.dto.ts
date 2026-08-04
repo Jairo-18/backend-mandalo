@@ -127,6 +127,16 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Número de afiliado ARL del repartidor (lo asigna el admin, NUNCA el registro público). Sin esto, el repartidor no ve pedidos disponibles aunque esté activo.',
+    example: 'ARL-00123',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  arlIndividualNumber?: string;
 }
 
 /**

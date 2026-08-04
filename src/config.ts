@@ -50,10 +50,11 @@ export const config = async () => {
       deliveryExtraMandaloRate:
         parseFloat(process.env.APP_DELIVERY_EXTRA_MANDALO_RATE as string) ||
         16,
-      // Tarifa mínima del Anexo I (§59): piso absoluto del valor del
-      // domicilio (base + km extra), antes de sumar recargos. 0 = sin piso.
-      deliveryMinFee:
-        parseFloat(process.env.APP_DELIVERY_MIN_FEE as string) || 10000,
+      // Tarifa mínima del Anexo I: reunión con el cliente 2026-08-04 —
+      // NO es un piso aparte, la tarifa base YA es el mínimo del servicio.
+      // 0 = sin piso extra (queda inerte; se deja configurable por si vuelve
+      // a pedirse un piso separado del futuro).
+      deliveryMinFee: parseFloat(process.env.APP_DELIVERY_MIN_FEE as string) || 0,
       // Recargo nocturno del Anexo I (§59): aplica entre 11:00pm y 5:30am,
       // hora de Bogotá. 100% para el repartidor (no se reparte con Mándalo,
       // mismo criterio que el resto de la tarifa base que le queda al
@@ -62,27 +63,38 @@ export const config = async () => {
         parseFloat(process.env.APP_DELIVERY_NIGHT_SURCHARGE as string) ||
         4500,
       // Recargo por condiciones climáticas del Anexo I (§59): se activa si
-      // Open-Meteo reporta lluvia/tormenta EN VIVO en las coordenadas del
-      // negocio (WeatherService, caché de 15 min — ver NOTAS §59, decisión
-      // provisional: quién se lo queda, ver deliveryNightSurcharge arriba).
+      // Open-Meteo reporta LLUVIA FUERTE EN VIVO (>= `weatherHeavyRainMm`,
+      // reunión 2026-08-04) en las coordenadas del negocio (WeatherService,
+      // caché de 15 min — decisión provisional de quién se lo queda, ver
+      // deliveryNightSurcharge arriba).
       deliveryWeatherSurcharge:
         parseFloat(process.env.APP_DELIVERY_WEATHER_SURCHARGE as string) ||
         2500,
-      // Recargo por alta demanda del Anexo I (§59): heurística provisional
-      // (NOTAS §59, no hay tracking de repartidores conectados todavía) —
-      // se activa si el negocio tiene `deliveryDemandThreshold` o más pedidos
-      // en PREP sin repartidor asignado al momento del cálculo.
+      // Umbral de "lluvia fuerte" (mm de precipitación en la última hora,
+      // dato `current.precipitation` de Open-Meteo) que activa el recargo
+      // climático — 7.5mm/h es el corte estándar de "lluvia fuerte" (WMO).
+      weatherHeavyRainMm:
+        parseFloat(process.env.APP_WEATHER_HEAVY_RAIN_MM as string) || 7.5,
+      // Recargo por alta demanda del Anexo I: reunión 2026-08-04 — se activa
+      // si hay `deliveryDemandThreshold` o más pedidos EN TODA LA APP (no por
+      // negocio) esperando repartidor (PREP sin `deliveryUserId`) al momento
+      // del cálculo.
       deliveryDemandSurcharge:
         parseFloat(process.env.APP_DELIVERY_DEMAND_SURCHARGE as string) ||
         2500,
       deliveryDemandThreshold:
         parseInt(process.env.APP_DELIVERY_DEMAND_THRESHOLD as string, 10) ||
-        3,
+        30,
       // Segundo intento de entrega del Anexo I (§59, Art. 31/32 TYC): cargo
       // único (un solo reintento por pedido) cuando el cliente decide
       // reintentar tras una entrega fallida. 100% para el repartidor.
       deliveryRetryFee:
         parseFloat(process.env.APP_DELIVERY_RETRY_FEE as string) || 6000,
+      // Minutos de espera en el sitio (reunión 2026-08-04) desde que el
+      // repartidor marca "En sitio" hasta que se habilita el segundo intento
+      // pagado (`retryAfterTimeout`) — se reinicia si se usa el segundo intento.
+      deliveryWaitMinutes:
+        parseInt(process.env.APP_DELIVERY_WAIT_MINUTES as string, 10) || 5,
       // Comisión por defecto del NEGOCIO sobre lo vendido (subtotal) — cada
       // negocio guarda SU propia tasa (organizational.commissionOrderRate,
       // editable por el admin); esto solo sirve de default al crear uno nuevo.
@@ -90,14 +102,16 @@ export const config = async () => {
         parseFloat(process.env.APP_DEFAULT_COMMISSION_ORDER_RATE as string) ||
         5,
       // Tarifa de servicio que se le cobra al CLIENTE encima del subtotal
-      // (SIN domicilio): `serviceFeePercent`% del subtotal, 100% ingreso de
-      // Mándalo (no se reparte con el negocio ni el repartidor, a diferencia
-      // de subtotal/deliveryFee). `serviceFeeCap` en 0 = sin tope — así lo
-      // exige el Anexo I / Art. 38 de los Términos y Condiciones (7% sin
-      // tope, NOTAS §59); se deja configurable por si se vuelve a topar.
+      // (SIN domicilio): `serviceFeePercent`% del subtotal, con tope
+      // `serviceFeeCap`, 100% ingreso de Mándalo (no se reparte con el
+      // negocio ni el repartidor). Reunión con el cliente 2026-08-04: vuelve
+      // a 5% con tope $5.000 (el tope se alcanza justo en subtotal $100.000
+      // — "5%, $5k a partir de los 100k, como estaba antes"). `serviceFeeCap`
+      // en 0 = sin tope.
       serviceFeePercent:
-        parseFloat(process.env.APP_SERVICE_FEE_PERCENT as string) || 7,
-      serviceFeeCap: parseFloat(process.env.APP_SERVICE_FEE_CAP as string) || 0,
+        parseFloat(process.env.APP_SERVICE_FEE_PERCENT as string) || 5,
+      serviceFeeCap:
+        parseFloat(process.env.APP_SERVICE_FEE_CAP as string) || 5000,
       cors: {
         origin,
         allowedHeaders: allowedHeaders.length ? allowedHeaders : ['*'],

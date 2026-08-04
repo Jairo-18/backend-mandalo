@@ -27,6 +27,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { ChatModule } from './chat/chat.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { DeliverySettlementModule } from './deliverySettlement/deliverySettlement.module';
+import { DeliveryAccidentModule } from './deliveryAccident/deliveryAccident.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BackupModule } from './backup/backup.module';
 import { CronJobModule } from './cronJobs/cron.job.module';
@@ -96,6 +97,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ChatModule,
     SettlementModule,
     DeliverySettlementModule,
+    DeliveryAccidentModule,
     ScheduleModule.forRoot(),
     BackupModule,
     CronJobModule,

@@ -198,6 +198,8 @@ export class AuthService {
         // "Cuenta en proceso de habilitación" (+ la nota del admin).
         isActive: user.isActive,
         observations: user.observations ?? null,
+        // Sin esto el repartidor no ve pedidos disponibles (reunión 2026-08-04).
+        arlIndividualNumber: user.arlIndividualNumber ?? null,
         // null = nunca aceptó Términos/Tratamiento de Datos → el front lo lleva
         // al gate de aceptación antes de entrar a la app (§41).
         termsAcceptedAt: user.termsAcceptedAt ?? null,
@@ -297,6 +299,8 @@ export class AuthService {
         // habilitación del repartidor (y la nota del admin) al abrir la app.
         isActive: user.isActive,
         observations: user.observations ?? null,
+        // Sin esto el repartidor no ve pedidos disponibles (reunión 2026-08-04).
+        arlIndividualNumber: user.arlIndividualNumber ?? null,
         termsAcceptedAt: user.termsAcceptedAt ?? null,
       },
     };

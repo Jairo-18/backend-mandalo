@@ -16,6 +16,7 @@ export class MailsService {
     subject,
     body,
     replyTo,
+    attachments,
   }: SendEmailOptions): Promise<void> {
     if (!to) {
       throw new HttpException(
@@ -30,6 +31,7 @@ export class MailsService {
       html: body,
       text: htmlToPlainText(body),
       replyTo,
+      attachments,
     });
   }
 }

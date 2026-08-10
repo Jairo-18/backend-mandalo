@@ -138,6 +138,28 @@ export class Invoice {
   })
   demandSurcharge: number;
 
+  // Reparto Mándalo/repartidor de `deliveryFee`, calculado con
+  // `DeliveryPricingService.splitFee()` UNA SOLA VEZ al crear el pedido y
+  // congelado desde entonces — si no se guardara acá, `deliverySettlement`
+  // tendría que reconstruirlo llamando `splitFee()` con la configuración
+  // VIGENTE, y liquidaciones viejas sin marcar pagadas cambiarían de monto
+  // solas cada vez que el admin ajuste las tarifas de domicilio.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  deliveryMandaloCut: number;
+
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  deliveryRiderCut: number;
+
   // Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
   // fijo (APP_SERVICE_FEE_PERCENT/APP_SERVICE_FEE_CAP) — 100% ingreso de
   // Mándalo, no toca la comisión del negocio ni el corte del repartidor.

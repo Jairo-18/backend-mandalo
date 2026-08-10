@@ -3,6 +3,7 @@ import { RegisterDeliveryFiles, UserService } from '../services/user.service';
 import { CrudUserService } from '../services/crudUser.service';
 import {
   BecomeDeliveryDto,
+  BulkInviteUsersDto,
   BusinessLeadDto,
   ChangeMyPasswordDto,
   CreateUserDto,
@@ -23,6 +24,10 @@ export class UserUC {
 
   create(dto: CreateUserDto) {
     return this._userService.create(dto);
+  }
+
+  bulkInvite(dto: BulkInviteUsersDto) {
+    return this._userService.bulkInvite(dto);
   }
 
   registerClient(dto: RegisterUserDto) {

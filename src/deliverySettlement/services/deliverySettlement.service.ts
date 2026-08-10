@@ -13,7 +13,6 @@ import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { SettlementPeriodType } from '../../shared/constants/settlementPeriodType.enum';
-import { DeliveryPricingService } from '../../shared/services/delivery-pricing.service';
 import {
   DeliverySettlementPeriodsParamsDto,
   MarkDeliverySettlementDto,
@@ -70,8 +69,9 @@ export interface DeliverySettlementPeriodItem {
  * calcula cuánto le corresponde COBRAR a cada repartidor por sus domicilios
  * entregados (§42). Solo suma pedidos ENTREGADOS, agrupados en quincenas
  * (1–15 / 16–fin de mes, hora Colombia) — la única unidad pagable. El reparto
- * Mándalo/repartidor se reconstruye por pedido (no es lineal con la suma:
- * cada pedido tiene su propio tramo base/extra) con `DeliveryPricingService`.
+ * Mándalo/repartidor de cada pedido se lee de `invoice.deliveryMandaloCut`/
+ * `deliveryRiderCut` (snapshot calculado UNA vez con `DeliveryPricingService`
+ * al crear el pedido, no se recalcula acá — ver comentario en la entidad).
  */
 @Injectable()
 export class DeliverySettlementService {
@@ -79,7 +79,6 @@ export class DeliverySettlementService {
     private readonly _invoiceRepository: InvoiceRepository,
     private readonly _userRepository: UserRepository,
     private readonly _deliverySettlementRepository: DeliverySettlementRepository,
-    private readonly _deliveryPricingService: DeliveryPricingService,
   ) {}
 
   // ---------- listado de períodos ----------
@@ -377,6 +376,8 @@ export class DeliverySettlementService {
       .innerJoin('invoice.stateType', 'stateType')
       .select(`to_char(${bucketExpr}, 'YYYY-MM-DD')`, 'periodStart')
       .addSelect('invoice."deliveryFee"', 'deliveryFee')
+      .addSelect('invoice."deliveryMandaloCut"', 'deliveryMandaloCut')
+      .addSelect('invoice."deliveryRiderCut"', 'deliveryRiderCut')
       .addSelect('invoice."deliverySurcharge"', 'deliverySurcharge')
       .addSelect('invoice."nightSurcharge"', 'nightSurcharge')
       .addSelect('invoice."weatherSurcharge"', 'weatherSurcharge')
@@ -393,6 +394,8 @@ export class DeliverySettlementService {
     const rows = await query.getRawMany<{
       periodStart: string;
       deliveryFee: string;
+      deliveryMandaloCut: string;
+      deliveryRiderCut: string;
       deliverySurcharge: string;
       nightSurcharge: string;
       weatherSurcharge: string;
@@ -417,13 +420,18 @@ export class DeliverySettlementService {
     for (const row of rows) {
       const fee = parseFloat(row.deliveryFee);
       // Recargos (reunión 2026-08-04, desglose por tipo) — 100% para el
-      // repartidor, no pasan por `splitFee()`.
+      // repartidor, no pasan por el reparto base/extra.
       const night = parseFloat(row.nightSurcharge ?? '0') || 0;
       const weather = parseFloat(row.weatherSurcharge ?? '0') || 0;
       const demand = parseFloat(row.demandSurcharge ?? '0') || 0;
       const retry = parseFloat(row.retryFeeCharged ?? '0') || 0;
       const surcharge = parseFloat(row.deliverySurcharge ?? '0') || 0;
-      const split = this._deliveryPricingService.splitFee(fee);
+      // Reparto Mándalo/repartidor de `fee`: se lee el snapshot guardado en
+      // la factura al crearla, NO se recalcula con la config vigente —
+      // liquidaciones de pedidos viejos no cambian de monto si el admin
+      // ajusta las tarifas de domicilio después.
+      const mandaloCut = parseFloat(row.deliveryMandaloCut ?? '0') || 0;
+      const riderCut = parseFloat(row.deliveryRiderCut ?? '0') || 0;
       const acc =
         byStart.get(row.periodStart) ??
         {
@@ -439,9 +447,9 @@ export class DeliverySettlementService {
         };
       acc.ordersCount += 1;
       acc.deliveryTotal += fee + surcharge;
-      acc.mandaloCut += split.mandaloCut;
-      acc.riderCut += split.riderCut + surcharge;
-      acc.tripTotal += split.riderCut;
+      acc.mandaloCut += mandaloCut;
+      acc.riderCut += riderCut + surcharge;
+      acc.tripTotal += riderCut;
       acc.nightTotal += night;
       acc.weatherTotal += weather;
       acc.demandTotal += demand;

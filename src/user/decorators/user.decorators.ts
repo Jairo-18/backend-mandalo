@@ -13,6 +13,19 @@ import {
   UpdateRecordResponseDto,
 } from '../../shared/dtos/response.dto';
 
+export function BulkInviteUsersDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary:
+        'Alta masiva de cuentas por correo (admin): CSV/lista de correos + rol fijo, contraseña fija por rol, correo de bienvenida individual por cuenta',
+    }),
+    ApiOkResponse({
+      description: 'Resumen de la tanda: creados, omitidos por ya existir, y fallidos',
+    }),
+  );
+}
+
 export function CreateUserDocs() {
   return applyDecorators(
     ApiBearerAuth(),

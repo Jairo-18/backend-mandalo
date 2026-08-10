@@ -1,10 +1,14 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   Equals,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -479,6 +483,33 @@ export class PushTokenDto {
   @IsNotEmpty({ message: 'El token de notificaciones es requerido' })
   @MaxLength(100)
   token: string;
+}
+
+/**
+ * Alta masiva de cuentas por el admin (subida de CSV o lista escrita a mano,
+ * ver `UserService.bulkInvite`). Todas las cuentas de la tanda nacen con el
+ * mismo rol y la misma contraseña fija de ese rol; cada una recibe su propio
+ * correo de bienvenida por separado.
+ */
+export class BulkInviteUsersDto {
+  @ApiProperty({
+    description: 'Rol con el que nacen todas las cuentas de esta tanda',
+    enum: [RoleTypeCode.CLIENT, RoleTypeCode.BUSINESS, RoleTypeCode.DELIVERY],
+  })
+  @IsIn([RoleTypeCode.CLIENT, RoleTypeCode.BUSINESS, RoleTypeCode.DELIVERY], {
+    message: 'El rol debe ser Cliente, Negocio o Domiciliario',
+  })
+  roleTypeCode: RoleTypeCode;
+
+  @ApiProperty({
+    type: [String],
+    example: ['juan.perez@gmail.com', 'maria.gomez@gmail.com'],
+  })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Sube al menos un correo' })
+  @ArrayMaxSize(300, { message: 'Máximo 300 correos por tanda' })
+  @IsEmail({}, { each: true, message: 'Hay un correo con formato inválido' })
+  emails: string[];
 }
 
 /**

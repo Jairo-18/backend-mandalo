@@ -18,6 +18,7 @@ import { User } from '../../shared/entities/user.entity';
 import { NOT_FOUND_MESSAGE } from '../../shared/constants/messages.constant';
 import {
   BecomeDeliveryDto,
+  BulkInviteUsersDto,
   BusinessLeadDto,
   CreateUserDto,
   RegisterUserDto,
@@ -26,7 +27,10 @@ import {
 } from '../dtos/user.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { MailsService } from '../../shared/services/mails.service';
-import { MailTemplateService } from '../../shared/services/mail-template.service';
+import {
+  bannerAttachment,
+  MailTemplateService,
+} from '../../shared/services/mail-template.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { CURRENT_TERMS_VERSION } from '../../shared/constants/terms.constant';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
@@ -39,11 +43,36 @@ const PASSWORD_RESET_CODE_MINUTES = 15;
 const DELETION_TOKEN_MINUTES = 30;
 const BUSINESS_CONTACT_EMAIL = 'mandaloputumayo@gmail.com';
 
+/**
+ * Contraseña fija por rol para la alta masiva del admin (`bulkInvite`,
+ * pedido explícito del cliente — no aleatoria, para que sea fácil de
+ * comunicar). El correo de bienvenida recomienda cambiarla de inmediato.
+ * Exportada: el endpoint de preview del correo (`UserController`) la reusa
+ * para no duplicar los 3 valores.
+ */
+export const BULK_INVITE_PASSWORDS: Partial<Record<RoleTypeCode, string>> = {
+  [RoleTypeCode.CLIENT]: 'MandaloCliente',
+  [RoleTypeCode.BUSINESS]: 'MandaloNegocio',
+  [RoleTypeCode.DELIVERY]: 'MandaloDomiciliario',
+};
+
+const BULK_INVITE_ROLE_LABELS: Partial<Record<RoleTypeCode, string>> = {
+  [RoleTypeCode.CLIENT]: 'Cliente',
+  [RoleTypeCode.BUSINESS]: 'Negocio',
+  [RoleTypeCode.DELIVERY]: 'Domiciliario',
+};
+
 export interface GoogleUserProfile {
   googleId: string;
   email: string;
   fullName: string;
   avatarUrl?: string;
+}
+
+export interface BulkInviteResult {
+  created: string[];
+  skippedExisting: string[];
+  failed: string[];
 }
 
 /** Fotos/documentos de verificación del registro de repartidor (multipart). */
@@ -145,6 +174,92 @@ export class UserService {
       isEmailVerified: true,
     });
     return await this._userRepository.save(user);
+  }
+
+  /**
+   * Alta masiva de cuentas (panel admin → "Alta masiva"): sube un CSV/lista
+   * de correos con un rol fijo (Cliente/Negocio/Domiciliario), crea una
+   * cuenta por cada correo NUEVO con la contraseña fija de ese rol
+   * (`BULK_INVITE_PASSWORDS`) y le manda un correo de bienvenida individual
+   * (nunca varios destinatarios en un mismo correo, para que nadie vea la
+   * contraseña de los demás). Los correos que ya tienen cuenta se omiten sin
+   * tocarlos; si falla la creación o el envío de uno, sigue con el resto.
+   */
+  async bulkInvite(dto: BulkInviteUsersDto): Promise<BulkInviteResult> {
+    const password = BULK_INVITE_PASSWORDS[dto.roleTypeCode];
+    const roleLabel = BULK_INVITE_ROLE_LABELS[dto.roleTypeCode];
+    if (!password || !roleLabel) {
+      throw new BadRequestException(
+        `El rol "${dto.roleTypeCode}" no admite alta masiva`,
+      );
+    }
+
+    const uniqueEmails = [
+      ...new Set(dto.emails.map((email) => email.trim().toLowerCase())),
+    ];
+
+    const created: string[] = [];
+    const skippedExisting: string[] = [];
+    const failed: string[] = [];
+
+    for (const email of uniqueEmails) {
+      let fullName: string;
+      try {
+        const exists = await this._userRepository.findOne({
+          where: { email },
+        });
+        if (exists) {
+          skippedExisting.push(email);
+          continue;
+        }
+
+        fullName = this.fullNameFromEmail(email);
+        await this.create({
+          fullName,
+          email,
+          password,
+          roleTypeCode: dto.roleTypeCode,
+        });
+        created.push(email);
+      } catch {
+        // No se pudo crear la cuenta (p. ej. choque de identificación/
+        // teléfono, que aquí nunca se envían, así que en la práctica no
+        // debería pasar): se cuenta como fallida y se sigue con el resto.
+        failed.push(email);
+        continue;
+      }
+
+      try {
+        await this._mailsService.sendEmail({
+          to: email,
+          subject: `¡Tu cuenta de ${roleLabel} en Mandalo ya está lista!`,
+          body: this._mailTemplateService.bulkInviteWelcomeTemplate(
+            fullName,
+            email,
+            password,
+            dto.roleTypeCode,
+          ),
+          attachments: [bannerAttachment()],
+        });
+      } catch {
+        // La cuenta SÍ quedó creada — solo falló el envío del correo. No se
+        // marca como fallida (ya está en `created`); si hace falta, el admin
+        // puede reenviar las credenciales a mano.
+      }
+    }
+
+    return { created, skippedExisting, failed };
+  }
+
+  /** "juan.perez+test@gmail.com" → "Juan Perez" (nombre provisional cuando la
+   * alta masiva solo trae el correo; el usuario lo puede corregir después). */
+  private fullNameFromEmail(email: string): string {
+    const localPart = email.split('@')[0] ?? email;
+    const words = localPart
+      .split(/[._+-]+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
+    return words.length ? words.join(' ') : localPart;
   }
 
   /**
@@ -452,6 +567,7 @@ export class UserService {
         verifyLink,
         user.fullName,
       ),
+      attachments: [bannerAttachment()],
     });
   }
 
@@ -524,6 +640,7 @@ export class UserService {
           code,
           user.fullName,
         ),
+        attachments: [bannerAttachment()],
       });
     } catch (error) {
       console.error('Error sending password reset email:', error);
@@ -925,6 +1042,7 @@ export class UserService {
           confirmLink,
           user.fullName,
         ),
+        attachments: [bannerAttachment()],
       });
     } catch (error) {
       console.error('Error sending account deletion email:', error);
@@ -952,6 +1070,7 @@ export class UserService {
         subject: `Nuevo negocio interesado: ${dto.businessName}`,
         body: this._mailTemplateService.businessLeadTemplate(dto),
         replyTo: dto.contactEmail,
+        attachments: [bannerAttachment()],
       });
     } catch (error) {
       console.error('Error sending business lead email:', error);

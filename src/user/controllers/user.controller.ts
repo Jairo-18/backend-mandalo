@@ -22,11 +22,13 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { MailTemplateService } from '../../shared/services/mail-template.service';
+import { MANDALO_BANNER_BASE64 } from '../../shared/constants/mandaloBanner.constant';
 import { Throttle } from '@nestjs/throttler';
 import { UserUC } from '../useCases/user.uc';
-import { RegisterDeliveryFiles } from '../services/user.service';
+import { BULK_INVITE_PASSWORDS, RegisterDeliveryFiles } from '../services/user.service';
 import {
   BecomeDeliveryDto,
+  BulkInviteUsersDto,
   BusinessLeadDto,
   ChangeMyPasswordDto,
   CreateUserDto,
@@ -54,6 +56,7 @@ import { Roles } from '../../shared/decorators/roles.decorator';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import {
+  BulkInviteUsersDocs,
   CreateUserDocs,
   DeleteUserDocs,
   FindOneUserDocs,
@@ -270,6 +273,85 @@ export class UserController {
       statusCode: HttpStatus.CREATED,
       message: 'Usuario creado exitosamente',
       data: { rowId: user.id },
+    };
+  }
+
+  /**
+   * Preview del correo de bienvenida de la alta masiva (pantalla "Alta
+   * masiva" del admin, botón "Ver preview del correo"): renderiza la MISMA
+   * plantilla que se manda de verdad, con datos de ejemplo, y la sirve como
+   * página web para abrirla en el navegador. Público a propósito (como los
+   * demás `@Res()` que sirven HTML): no expone nada sensible — la contraseña
+   * que se ve es la misma fija que ya se le manda a cualquier cuenta de ese
+   * rol, no un secreto por cuenta.
+   */
+  @Get('bulk-invite/preview')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  previewBulkInviteEmail(
+    @Query('role') role: string,
+    @Res() res: Response,
+  ): void {
+    const roleTypeCode = (
+      [RoleTypeCode.CLIENT, RoleTypeCode.BUSINESS, RoleTypeCode.DELIVERY] as string[]
+    ).includes(role)
+      ? (role as RoleTypeCode)
+      : RoleTypeCode.CLIENT;
+    const html = this._mailTemplateService.bulkInviteWelcomeTemplate(
+      'Juan Pérez',
+      'juan.perez@correo.com',
+      BULK_INVITE_PASSWORDS[roleTypeCode]!,
+      roleTypeCode,
+      // En el navegador el banner va como `data:` URI (no hay adjunto CID
+      // que resolver, a diferencia del correo real).
+      `data:image/png;base64,${MANDALO_BANNER_BASE64}`,
+    );
+    res.status(HttpStatus.OK).type('html').send(html);
+  }
+
+  /** Preview de la página "Cuenta verificada" (solo para revisar el diseño
+   * en el navegador — nunca se manda por correo, es una página web real). */
+  @Get('verify-email/preview')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  previewVerifyEmailResult(@Res() res: Response): void {
+    res
+      .status(HttpStatus.OK)
+      .type('html')
+      .send(
+        this._mailTemplateService.verifyEmailResultPage(
+          true,
+          'Tu correo fue verificado correctamente.',
+        ),
+      );
+  }
+
+  /** Preview de la página "Cuenta eliminada" (mismo motivo que la de arriba). */
+  @Get('confirm-deletion/preview')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  previewDeletionResult(@Res() res: Response): void {
+    res
+      .status(HttpStatus.OK)
+      .type('html')
+      .send(
+        this._mailTemplateService.deletionResultPage(
+          true,
+          'Tu cuenta fue eliminada correctamente.',
+        ),
+      );
+  }
+
+  @Post('bulk-invite')
+  @UseGuards(AuthGuard(), RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @BulkInviteUsersDocs()
+  async bulkInvite(@Body() body: BulkInviteUsersDto) {
+    const result = await this._userUC.bulkInvite(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: `${result.created.length} cuenta(s) creada(s) y notificada(s) por correo`,
+      data: result,
     };
   }
 

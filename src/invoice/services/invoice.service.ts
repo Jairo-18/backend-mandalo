@@ -343,6 +343,11 @@ export class InvoiceService {
       address.latitude ?? undefined,
       address.longitude ?? undefined,
     );
+    // Reparto Mándalo/repartidor de `deliveryFee`, congelado en la factura
+    // (ver comentario de las columnas en la entidad) — la liquidación del
+    // repartidor lee esto en vez de recalcularlo con la config vigente.
+    const { mandaloCut: deliveryMandaloCut, riderCut: deliveryRiderCut } =
+      this._deliveryPricingService.splitFee(deliveryFee);
     const serviceFee = this.computeServiceFee(subtotal);
     const total = this.round2(
       subtotal + deliveryFee + deliverySurcharge + serviceFee,
@@ -361,6 +366,8 @@ export class InvoiceService {
         deliveryLongitude: address.longitude ?? null,
         subtotal,
         deliveryFee,
+        deliveryMandaloCut,
+        deliveryRiderCut,
         deliverySurcharge,
         nightSurcharge,
         weatherSurcharge,
@@ -608,6 +615,38 @@ export class InvoiceService {
     return this.hideCodesFor(user, full);
   }
 
+  /**
+   * Cobra el cargo único del segundo intento de forma ATÓMICA: UPDATE
+   * condicional sobre `retryCount = 0` (mismo patrón de claim que `take()`),
+   * con los montos incrementados en SQL en vez de recalculados a partir de
+   * un valor leído antes en memoria. Sin esto, dos peticiones casi
+   * simultáneas al mismo pedido (doble tap, o un reintento automático de la
+   * app sobre la conexión rural típica de esta zona) podían cobrar el
+   * recargo dos veces y saltarse el límite de "un solo reintento por
+   * pedido" — los dos call sites de retry (`retryAfterTimeout` y el tramo
+   * FALL→RUTA de `changeState`) comparten este mismo guard.
+   * Devuelve el monto cobrado, o `null` si el reintento ya se había usado.
+   */
+  private async chargeRetryFeeOnce(id: number): Promise<number | null> {
+    const retryFee =
+      this._configService.get<number>('app.deliveryRetryFee') ?? 0;
+    const result = await this._invoiceRepository
+      .createQueryBuilder()
+      .update(Invoice)
+      .set({
+        retryCount: 1,
+        retryFeeCharged: retryFee,
+        retryAcceptedAt: new Date(),
+        deliverySurcharge: () => `COALESCE("deliverySurcharge", 0) + :fee`,
+        total: () => `"total" + :fee`,
+      })
+      .where('id = :id', { id })
+      .andWhere('retryCount = 0')
+      .setParameters({ fee: retryFee })
+      .execute();
+    return result.affected ? retryFee : null;
+  }
+
   // ---------- en sitio / segundo intento por tiempo (reunión 2026-08-04) ----------
 
   /**
@@ -707,19 +746,15 @@ export class InvoiceService {
       );
     }
 
-    const retryFee =
-      this._configService.get<number>('app.deliveryRetryFee') ?? 0;
-    invoice.retryCount += 1;
-    invoice.retryFeeCharged = retryFee;
-    invoice.retryAcceptedAt = new Date();
-    invoice.deliverySurcharge = this.round2(
-      (invoice.deliverySurcharge ?? 0) + retryFee,
-    );
-    invoice.total = this.round2(invoice.total + retryFee);
+    const charged = await this.chargeRetryFeeOnce(id);
+    if (charged === null) {
+      throw new BadRequestException(
+        'Ya se usó el único segundo intento permitido para este pedido.',
+      );
+    }
     // Reinicia el cronómetro — el repartidor sigue ahí, no hace falta que
     // vuelva a marcar "En sitio".
-    invoice.arrivedAt = new Date();
-    await this._invoiceRepository.save(invoice);
+    await this._invoiceRepository.update(id, { arrivedAt: new Date() });
 
     const full = await this.findByIdWithRelations(id);
     this._gateway.emitToUser(full.userId, 'invoice:updated', {
@@ -742,7 +777,7 @@ export class InvoiceService {
     );
     void this._pushService.sendToUsers(recipients, {
       title: `Pedido #${full.id} — segundo intento`,
-      body: `Se dieron ${waitMinutes} minutos más de espera (cargo de $${retryFee.toLocaleString('es-CO')}).`,
+      body: `Se dieron ${waitMinutes} minutos más de espera (cargo de $${charged.toLocaleString('es-CO')}).`,
       data: { type: 'order', invoiceId: full.id },
     });
     return this.hideCodesFor(user, full);
@@ -988,15 +1023,23 @@ export class InvoiceService {
           'Ya se usó el único reintento de entrega permitido para este pedido — la única opción ahora es cancelar.',
         );
       }
-      const retryFee =
-        this._configService.get<number>('app.deliveryRetryFee') ?? 0;
-      invoice.retryCount += 1;
-      invoice.retryFeeCharged = retryFee;
+      const charged = await this.chargeRetryFeeOnce(id);
+      if (charged === null) {
+        throw new BadRequestException(
+          'Ya se usó el único reintento de entrega permitido para este pedido — la única opción ahora es cancelar.',
+        );
+      }
+      // `chargeRetryFeeOnce` ya persistió el cobro con un UPDATE atómico —
+      // hay que reflejarlo en el objeto en memoria para que el
+      // `invoice.save()` genérico de más abajo (cambio de estado + stamps)
+      // no lo pise con los valores viejos que se leyeron al principio.
+      invoice.retryCount = 1;
+      invoice.retryFeeCharged = charged;
       invoice.retryAcceptedAt = new Date();
       invoice.deliverySurcharge = this.round2(
-        (invoice.deliverySurcharge ?? 0) + retryFee,
+        (invoice.deliverySurcharge ?? 0) + charged,
       );
-      invoice.total = this.round2(invoice.total + retryFee);
+      invoice.total = this.round2(invoice.total + charged);
     }
 
     // Marcar entregado exige haber marcado "En sitio" antes (reunión

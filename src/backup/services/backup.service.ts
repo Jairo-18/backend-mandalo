@@ -115,6 +115,26 @@ export class BackupService {
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number') return value.toString();
     if (value instanceof Date) return `'${value.toISOString()}'`;
+    // Columnas array nativas de Postgres (p. ej. product.images: text[]) NO
+    // se restauran con sintaxis JSON ("[...]") — eso da "malformed array
+    // literal" al correr el INSERT. Un array de Postgres se escribe con
+    // llaves ("{...}"), cada elemento entre comillas dobles propias, con
+    // backslash/comillas internas escapadas por su cuenta ANTES de aplicar
+    // el escape de comilla simple del SQL de afuera (bug real encontrado
+    // 2026-08-11: el backup de prod generaba INSERTs de "product" que
+    // fallaban al restaurarlos en dev).
+    if (Array.isArray(value)) {
+      const arrayLiteral = `{${value
+        .map((el) => {
+          if (el === null || el === undefined) return 'NULL';
+          const escaped = String(el)
+            .replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"');
+          return `"${escaped}"`;
+        })
+        .join(',')}}`;
+      return `'${arrayLiteral.replace(/'/g, "''")}'`;
+    }
     if (typeof value === 'object')
       return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
     return `'${String(value).replace(/'/g, "''")}'`;

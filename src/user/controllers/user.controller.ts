@@ -110,7 +110,12 @@ export class UserController {
     res
       .status(success ? HttpStatus.OK : HttpStatus.BAD_REQUEST)
       .type('html')
-      .send(this._mailTemplateService.verifyEmailResultPage(success, message));
+      .send(
+        await this._mailTemplateService.verifyEmailResultPage(
+          success,
+          message,
+        ),
+      );
   }
 
   /**
@@ -172,7 +177,9 @@ export class UserController {
     res
       .status(success ? HttpStatus.OK : HttpStatus.BAD_REQUEST)
       .type('html')
-      .send(this._mailTemplateService.deletionResultPage(success, message));
+      .send(
+        await this._mailTemplateService.deletionResultPage(success, message),
+      );
   }
 
   @Post('register/client')
@@ -288,16 +295,16 @@ export class UserController {
   @Get('bulk-invite/preview')
   @SkipApiKey()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  previewBulkInviteEmail(
+  async previewBulkInviteEmail(
     @Query('role') role: string,
     @Res() res: Response,
-  ): void {
+  ): Promise<void> {
     const roleTypeCode = (
       [RoleTypeCode.CLIENT, RoleTypeCode.BUSINESS, RoleTypeCode.DELIVERY] as string[]
     ).includes(role)
       ? (role as RoleTypeCode)
       : RoleTypeCode.CLIENT;
-    const html = this._mailTemplateService.bulkInviteWelcomeTemplate(
+    const html = await this._mailTemplateService.bulkInviteWelcomeTemplate(
       'Juan Pérez',
       'juan.perez@correo.com',
       BULK_INVITE_PASSWORDS[roleTypeCode]!,
@@ -314,12 +321,12 @@ export class UserController {
   @Get('verify-email/preview')
   @SkipApiKey()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  previewVerifyEmailResult(@Res() res: Response): void {
+  async previewVerifyEmailResult(@Res() res: Response): Promise<void> {
     res
       .status(HttpStatus.OK)
       .type('html')
       .send(
-        this._mailTemplateService.verifyEmailResultPage(
+        await this._mailTemplateService.verifyEmailResultPage(
           true,
           'Tu correo fue verificado correctamente.',
         ),
@@ -330,12 +337,12 @@ export class UserController {
   @Get('confirm-deletion/preview')
   @SkipApiKey()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  previewDeletionResult(@Res() res: Response): void {
+  async previewDeletionResult(@Res() res: Response): Promise<void> {
     res
       .status(HttpStatus.OK)
       .type('html')
       .send(
-        this._mailTemplateService.deletionResultPage(
+        await this._mailTemplateService.deletionResultPage(
           true,
           'Tu cuenta fue eliminada correctamente.',
         ),

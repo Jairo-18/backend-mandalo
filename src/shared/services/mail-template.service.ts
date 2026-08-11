@@ -2,8 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { MANDALO_BANNER_BASE64 } from '../constants/mandaloBanner.constant';
 import { MailAttachment } from '../interfaces/mail.interface';
 import { RoleTypeCode } from '../roles/roleTypeCode.enum';
+import { AppSettingsRepository } from '../repositories/appSettings.repository';
 
-const BRAND = {
+/** Nombre/eslogan (fijos, no los edita el admin) + colores de RESPALDO — se
+ * usan solo si por lo que sea no hay fila en `appSettings` todavía (mismos
+ * valores que sus defaults de columna en la entidad). En uso normal, cada
+ * plantilla resuelve `primary`/`dark`/`muted`/`surface` en vivo desde
+ * `appSettings` (lo que edita el admin en "Aplicación") — antes quedaban
+ * fijos acá y un cambio de color de marca nunca llegaba a los correos. */
+const DEFAULT_BRAND = {
   name: 'Mandalo',
   slogan: 'LO PIDES, LO MANDAMOS.',
   primary: '#FF5A3C',
@@ -11,6 +18,8 @@ const BRAND = {
   muted: '#7A7A8A',
   surface: '#F2F2F2',
 };
+
+type Brand = typeof DEFAULT_BRAND;
 
 /**
  * CID del banner de marca dentro del correo (`cid:mandalo-banner`) — el
@@ -47,7 +56,7 @@ function bannerRow(src: string) {
   return `
                 <tr>
                   <td style="padding: 0; line-height: 0;">
-                    <img src="${src}" alt="${BRAND.name}" style="display: block; width: 100%; height: auto; border: 0;" />
+                    <img src="${src}" alt="${DEFAULT_BRAND.name}" style="display: block; width: 100%; height: auto; border: 0;" />
                   </td>
                 </tr>`;
 }
@@ -55,15 +64,40 @@ function bannerRow(src: string) {
 /**
  * Plantillas HTML de los correos transaccionales y de las páginas que sirve
  * el backend (p. ej. el resultado de la verificación de correo), con la
- * identidad de marca de Mándalo.
+ * identidad de marca de Mándalo. Los colores se resuelven EN VIVO desde
+ * `appSettings` en cada llamada (por eso los 7 métodos públicos son
+ * `async`) — así un cambio de color hecho por el admin en "Aplicación" se
+ * ve en el siguiente correo que se mande, sin necesidad de redeploy.
  */
 @Injectable()
 export class MailTemplateService {
-  verifyEmailTemplate(
+  constructor(
+    private readonly _appSettingsRepository: AppSettingsRepository,
+  ) {}
+
+  /** Trae los colores vigentes de `appSettings`; si por lo que sea no hay
+   * fila todavía, cae a los defaults de marca (mismo valor que la columna). */
+  private async resolveBrand(): Promise<Brand> {
+    const settings = await this._appSettingsRepository.findOne({
+      where: { id: 1 },
+    });
+    if (!settings) return DEFAULT_BRAND;
+    return {
+      name: DEFAULT_BRAND.name,
+      slogan: DEFAULT_BRAND.slogan,
+      primary: settings.primaryColor || DEFAULT_BRAND.primary,
+      dark: settings.darkColor || DEFAULT_BRAND.dark,
+      muted: settings.textSecondaryLightColor || DEFAULT_BRAND.muted,
+      surface: settings.surfaceLightColor || DEFAULT_BRAND.surface,
+    };
+  }
+
+  async verifyEmailTemplate(
     verifyLink: string,
     fullName: string,
     bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
   ) {
+    const BRAND = await this.resolveBrand();
     return `
       <div style="margin: 0; padding: 0; background-color: ${BRAND.surface}; font-family: 'Helvetica', Arial, sans-serif; width: 100%;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${BRAND.surface}; padding: 40px 10px;">
@@ -117,11 +151,12 @@ export class MailTemplateService {
    * el portapapeles. Lo que sí ayuda (y ya está) es un código grande, con
    * mucho espaciado entre dígitos, fácil de leer y teclear a mano.
    */
-  resetPasswordTemplate(
+  async resetPasswordTemplate(
     code: string,
     fullName: string,
     bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
   ) {
+    const BRAND = await this.resolveBrand();
     return `
       <div style="margin: 0; padding: 0; background-color: ${BRAND.surface}; font-family: 'Helvetica', Arial, sans-serif; width: 100%;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${BRAND.surface}; padding: 40px 10px;">
@@ -171,7 +206,8 @@ export class MailTemplateService {
    * funcionan bien; para verla renderizada de verdad usa
    * `GET /user/verify-email/preview`, no la mandes por correo.
    */
-  verifyEmailResultPage(success: boolean, message: string) {
+  async verifyEmailResultPage(success: boolean, message: string) {
+    const BRAND = await this.resolveBrand();
     const icon = success ? '✓' : '✕';
     const iconBg = success ? '#22C55E' : '#EF4444';
     const title = success ? '¡Cuenta verificada!' : 'No se pudo verificar';
@@ -200,11 +236,12 @@ export class MailTemplateService {
    * pública, punto 1b de la auditoría de Google Play — ver NOTAS.md §49).
    * Tono de advertencia: la acción es irreversible.
    */
-  deletionRequestTemplate(
+  async deletionRequestTemplate(
     confirmLink: string,
     fullName: string,
     bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
   ) {
+    const BRAND = await this.resolveBrand();
     return `
       <div style="margin: 0; padding: 0; background-color: ${BRAND.surface}; font-family: 'Helvetica', Arial, sans-serif; width: 100%;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${BRAND.surface}; padding: 40px 10px;">
@@ -256,7 +293,7 @@ export class MailTemplateService {
    * registrarse (formulario de "¿Tienes un negocio?" en /auth/register —
    * antes era un `mailto:` que abría el correo del dispositivo).
    */
-  businessLeadTemplate(
+  async businessLeadTemplate(
     lead: {
       businessName: string;
       ownerName: string;
@@ -268,6 +305,7 @@ export class MailTemplateService {
     },
     bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
   ) {
+    const BRAND = await this.resolveBrand();
     const row = (label: string, value?: string) =>
       value
         ? `
@@ -319,7 +357,8 @@ export class MailTemplateService {
    * Página HTML que ve el usuario al abrir el enlace de "eliminar mi cuenta"
    * (mismo patrón que `verifyEmailResultPage` — ver esa nota, aplica igual).
    */
-  deletionResultPage(success: boolean, message: string) {
+  async deletionResultPage(success: boolean, message: string) {
+    const BRAND = await this.resolveBrand();
     const icon = success ? '✓' : '✕';
     const iconBg = success ? '#22C55E' : '#EF4444';
     const title = success ? 'Cuenta eliminada' : 'No se pudo eliminar tu cuenta';
@@ -350,13 +389,14 @@ export class MailTemplateService {
    * contraseña de los demás) con la contraseña fija del rol y las
    * instrucciones de uso propias de ese rol.
    */
-  bulkInviteWelcomeTemplate(
+  async bulkInviteWelcomeTemplate(
     fullName: string,
     email: string,
     password: string,
     roleTypeCode: RoleTypeCode,
     bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
   ) {
+    const BRAND = await this.resolveBrand();
     const copy: Record<
       string,
       { roleLabel: string; intro: string; steps: string[] }

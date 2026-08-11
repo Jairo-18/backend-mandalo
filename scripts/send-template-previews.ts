@@ -14,6 +14,7 @@ import {
   bannerAttachment,
   MailTemplateService,
 } from '../src/shared/services/mail-template.service';
+import { AppSettingsRepository } from '../src/shared/repositories/appSettings.repository';
 import { RoleTypeCode } from '../src/shared/roles/roleTypeCode.enum';
 
 const RECIPIENT = 'jhonlegarda1.2@gmail.com';
@@ -49,7 +50,12 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
-async function send(label: string, subject: string, html: string) {
+async function send(
+  label: string,
+  subject: string,
+  htmlOrPromise: string | Promise<string>,
+) {
+  const html = await htmlOrPromise;
   await transporter.sendMail({
     from: env.MAIL_SENDER,
     to: RECIPIENT,
@@ -65,7 +71,16 @@ async function send(label: string, subject: string, html: string) {
 }
 
 async function main() {
-  const svc = new MailTemplateService();
+  // Script standalone, fuera del contenedor de NestJS: no arma una conexión
+  // real a la base de datos, así que las plantillas caen a los colores de
+  // marca por defecto (mismo comportamiento que en la app real cuando
+  // `appSettings` todavía no tiene fila) en vez de los que el admin haya
+  // configurado en producción/dev — para previsualizar con colores en vivo,
+  // usar el endpoint `GET /user/bulk-invite/preview` en cambio.
+  const stubRepository = {
+    findOne: async () => null,
+  } as unknown as AppSettingsRepository;
+  const svc = new MailTemplateService(stubRepository);
   const DUMMY_NAME = 'Juan Pérez';
 
   await send(

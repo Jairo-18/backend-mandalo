@@ -230,15 +230,16 @@ export class UserService {
       }
 
       try {
+        const body = await this._mailTemplateService.bulkInviteWelcomeTemplate(
+          fullName,
+          email,
+          password,
+          dto.roleTypeCode,
+        );
         await this._mailsService.sendEmail({
           to: email,
           subject: `¡Tu cuenta de ${roleLabel} en Mandalo ya está lista!`,
-          body: this._mailTemplateService.bulkInviteWelcomeTemplate(
-            fullName,
-            email,
-            password,
-            dto.roleTypeCode,
-          ),
+          body,
           attachments: [bannerAttachment()],
         });
       } catch {
@@ -560,13 +561,14 @@ export class UserService {
       this._configService.get<string>('app.baseUrl') || 'http://localhost:3000';
     const verifyLink = `${baseUrl}/user/verify-email?token=${token}&userId=${user.id}`;
 
+    const body = await this._mailTemplateService.verifyEmailTemplate(
+      verifyLink,
+      user.fullName,
+    );
     await this._mailsService.sendEmail({
       to: user.email,
       subject: 'Verifica tu correo electrónico',
-      body: this._mailTemplateService.verifyEmailTemplate(
-        verifyLink,
-        user.fullName,
-      ),
+      body,
       attachments: [bannerAttachment()],
     });
   }
@@ -633,13 +635,14 @@ export class UserService {
     });
 
     try {
+      const body = await this._mailTemplateService.resetPasswordTemplate(
+        code,
+        user.fullName,
+      );
       await this._mailsService.sendEmail({
         to: user.email,
         subject: 'Código para restablecer tu contraseña',
-        body: this._mailTemplateService.resetPasswordTemplate(
-          code,
-          user.fullName,
-        ),
+        body,
         attachments: [bannerAttachment()],
       });
     } catch (error) {
@@ -1035,13 +1038,14 @@ export class UserService {
     const confirmLink = `${baseUrl}/user/confirm-deletion?token=${token}&userId=${user.id}`;
 
     try {
+      const body = await this._mailTemplateService.deletionRequestTemplate(
+        confirmLink,
+        user.fullName,
+      );
       await this._mailsService.sendEmail({
         to: user.email,
         subject: 'Confirma la eliminación de tu cuenta',
-        body: this._mailTemplateService.deletionRequestTemplate(
-          confirmLink,
-          user.fullName,
-        ),
+        body,
         attachments: [bannerAttachment()],
       });
     } catch (error) {
@@ -1065,10 +1069,11 @@ export class UserService {
    */
   async sendBusinessLead(dto: BusinessLeadDto): Promise<void> {
     try {
+      const body = await this._mailTemplateService.businessLeadTemplate(dto);
       await this._mailsService.sendEmail({
         to: BUSINESS_CONTACT_EMAIL,
         subject: `Nuevo negocio interesado: ${dto.businessName}`,
-        body: this._mailTemplateService.businessLeadTemplate(dto),
+        body,
         replyTo: dto.contactEmail,
         attachments: [bannerAttachment()],
       });

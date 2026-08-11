@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ExploreService } from '../services/explore.service';
 import {
+  DeliveryEstimateParamsDto,
   PaginatedExploreOrganizationalsParamsDto,
   PaginatedExploreProductsParamsDto,
 } from '../dtos/explore.dto';
@@ -30,5 +31,9 @@ export class ExploreUC {
     params: PaginatedExploreProductsParamsDto,
   ) {
     return this._exploreService.paginatedProducts(organizationalId, params);
+  }
+
+  deliveryEstimates(params: DeliveryEstimateParamsDto) {
+    return this._exploreService.deliveryEstimates(params);
   }
 }

@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsInt, IsNumber, IsOptional } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
@@ -36,6 +36,37 @@ export class PaginatedExploreOrganizationalsParamsDto extends NearParamsDto {
   @IsArray()
   @IsInt({ each: true })
   tagIds?: number[];
+}
+
+/**
+ * Cotización de domicilio (distancia + tarifa + ETA) desde la ubicación del
+ * cliente hasta uno o varios negocios — para mostrarla en el explorar SIN
+ * crear un pedido (estilo Rappi). `lat`/`lng` son obligatorios (a diferencia
+ * de `NearParamsDto`, que los usa como filtro opcional).
+ */
+export class DeliveryEstimateParamsDto {
+  @ApiProperty({ description: 'Latitud del cliente', example: 1.0285 })
+  @Type(() => Number)
+  @IsNumber()
+  lat: number;
+
+  @ApiProperty({ description: 'Longitud del cliente', example: -76.6226 })
+  @Type(() => Number)
+  @IsNumber()
+  lng: number;
+
+  @ApiProperty({
+    description: 'Ids de negocios separados por coma (ej. 1,3,7)',
+    example: '1,3,7',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.split(',').filter(Boolean).map(Number)
+      : value,
+  )
+  @IsArray()
+  @IsInt({ each: true })
+  organizationalIds: number[];
 }
 
 /** Listado de productos de un negocio para el cliente (search sobre nombre). */

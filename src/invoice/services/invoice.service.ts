@@ -1257,8 +1257,7 @@ export class InvoiceService {
       invoice.deliveryLatitude,
       invoice.deliveryLongitude,
     );
-    const minutes = Math.round(((distKm * 1.3) / 25) * 60) + 5;
-    return Math.min(Math.max(minutes, 10), 90);
+    return this._deliveryPricingService.estimateMinutesForDistance(distKm);
   }
 
   private broadcastStateChange(invoice: Invoice, target: StateTypeCode): void {

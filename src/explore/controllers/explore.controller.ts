@@ -11,6 +11,7 @@ import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags } from '@nestjs/swagger';
 import { ExploreUC } from '../useCases/explore.uc';
 import {
+  DeliveryEstimateParamsDto,
   PaginatedExploreOrganizationalsParamsDto,
   PaginatedExploreProductsParamsDto,
 } from '../dtos/explore.dto';
@@ -19,6 +20,7 @@ import { Organizational } from '../../shared/entities/organizational.entity';
 import { Product } from '../../shared/entities/product.entity';
 import {
   FindExploreOrganizationalDocs,
+  GetDeliveryEstimateDocs,
   GetExploreFiltersDocs,
   GetPaginatedExploreAllProductsDocs,
   GetPaginatedExploreOrganizationalsDocs,
@@ -94,5 +96,16 @@ export class ExploreController {
     @Query() params: PaginatedExploreProductsParamsDto,
   ): Promise<ResponsePaginationDto<Product>> {
     return this._exploreUC.paginatedProducts(id, params);
+  }
+
+  @Get('delivery-estimate')
+  @CacheTTL(2 * 60_000)
+  @GetDeliveryEstimateDocs()
+  async deliveryEstimate(@Query() params: DeliveryEstimateParamsDto) {
+    const data = await this._exploreUC.deliveryEstimates(params);
+    return {
+      statusCode: HttpStatus.OK,
+      data,
+    };
   }
 }

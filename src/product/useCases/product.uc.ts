@@ -35,7 +35,7 @@ export class ProductUC {
     return this._productService.addImage(user, id, file);
   }
 
-  removeImage(user: User, id: number, url: string) {
-    return this._productService.removeImage(user, id, url);
+  removeImages(user: User, id: number, urls: string[]) {
+    return this._productService.removeImages(user, id, urls);
   }
 }

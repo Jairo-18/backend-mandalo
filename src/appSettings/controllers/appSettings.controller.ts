@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpStatus,
+  Patch,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { AppSettingsUC } from '../useCases/appSettings.uc';
@@ -21,6 +30,12 @@ export class AppSettingsController {
 
   @Get()
   @SkipApiKey()
+  // La pide CADA arranque de la app, de TODOS los usuarios, antes de que
+  // haya sesión (splash) — casi nunca cambia (solo la edita el admin), así
+  // que se cachea igual que `/catalog` (§21 de NOTAS) en vez de golpear la
+  // DB en cada apertura.
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(10 * 60_000)
   async get() {
     const data = await this._appSettingsUC.get();
     return {

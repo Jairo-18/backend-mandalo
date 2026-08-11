@@ -57,3 +57,14 @@ export function GetPaginatedExploreProductsDocs() {
     ApiOkResponse(),
   );
 }
+
+export function GetDeliveryEstimateDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary:
+        'Distancia, tarifa de domicilio y ETA desde el cliente hasta uno o varios negocios (sin crear pedido)',
+    }),
+    ApiOkResponse(),
+  );
+}

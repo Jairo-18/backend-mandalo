@@ -6,10 +6,12 @@ import {
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
 import { CategoryTypeRepository } from '../../shared/repositories/categoryType.repository';
+import { InvoiceDetailRepository } from '../../shared/repositories/invoiceDetail.repository';
 import { Product } from '../../shared/entities/product.entity';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { User } from '../../shared/entities/user.entity';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
+import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import {
@@ -29,8 +31,15 @@ export class ProductService {
     private readonly _productRepository: ProductRepository,
     private readonly _organizationalRepository: OrganizationalRepository,
     private readonly _categoryTypeRepository: CategoryTypeRepository,
+    private readonly _invoiceDetailRepository: InvoiceDetailRepository,
     private readonly _localStorageService: LocalStorageService,
   ) {}
+
+  /** Estados de pedido que ya no pueden verse afectados por borrar el producto. */
+  private static readonly TERMINAL_STATES = [
+    StateTypeCode.DELIVERED,
+    StateTypeCode.CANCELLED,
+  ];
 
   /** Negocio del usuario autenticado (dueño/representante legal). */
   async findMyOrganizational(user: User): Promise<Organizational> {
@@ -118,6 +127,7 @@ export class ProductService {
 
   async delete(user: User, id: number): Promise<void> {
     const product = await this.findOne(user, id);
+    await this.assertNoActiveOrders(product.id);
     await this._productRepository.remove(product);
     // Las fotos del producto se borran del disco (solo las subidas propias).
     for (const url of product.images ?? []) {
@@ -145,28 +155,63 @@ export class ProductService {
     return { imageUrl, images: product.images };
   }
 
-  /** Quita una foto del producto y borra el archivo del disco (si es propio). */
-  async removeImage(
+  /**
+   * Quita una o varias fotos del producto en UNA sola consulta+guardado
+   * (antes el caller hacía un DELETE por foto —cada uno con su propio
+   * find+save— al guardar la edición de un producto con varias fotos
+   * quitadas a la vez). Los archivos del disco sí se borran uno por uno
+   * (E/S de archivos, no hay forma de batchear eso).
+   */
+  async removeImages(
     user: User,
     id: number,
-    url: string,
+    urls: string[],
   ): Promise<{ images: string[] }> {
     const product = await this.findOne(user, id);
 
-    if (!(product.images ?? []).includes(url)) {
+    const missing = urls.filter((url) => !(product.images ?? []).includes(url));
+    if (missing.length > 0) {
       throw new NotFoundException('La imagen no pertenece a este producto');
     }
 
-    product.images = product.images.filter((image) => image !== url);
+    product.images = (product.images ?? []).filter((image) => !urls.includes(image));
     await this._productRepository.save(product);
 
-    const publicId = this._localStorageService.publicIdFromUrl(url);
-    if (publicId) await this._localStorageService.deleteImage(publicId);
+    for (const url of urls) {
+      const publicId = this._localStorageService.publicIdFromUrl(url);
+      if (publicId) await this._localStorageService.deleteImage(publicId);
+    }
 
     return { images: product.images };
   }
 
   // ---------- helpers ----------
+
+  /**
+   * Impide borrar físicamente un producto referenciado por pedidos en curso
+   * (cualquier estado que no sea ENTR/CANC): el snapshot en InvoiceDetail
+   * protege el historial, pero un pedido activo aún depende de que el
+   * negocio pueda cumplirlo. En ese caso se debe desactivar el producto
+   * (isActive=false) en vez de eliminarlo.
+   */
+  private async assertNoActiveOrders(productId: number): Promise<void> {
+    const activeOrders = await this._invoiceDetailRepository
+      .createQueryBuilder('detail')
+      .innerJoin('detail.invoice', 'invoice')
+      .innerJoin('invoice.stateType', 'stateType')
+      .where('detail.productId = :productId', { productId })
+      .andWhere('stateType.code NOT IN (:...terminal)', {
+        terminal: ProductService.TERMINAL_STATES,
+      })
+      .getCount();
+
+    if (activeOrders > 0) {
+      throw new BadRequestException(
+        'No puedes eliminar este producto: tiene pedidos activos en curso. ' +
+          'Desactívalo (disponible=no) en vez de eliminarlo para no afectar esos pedidos.',
+      );
+    }
+  }
 
   private async assertCategoryExists(categoryTypeId?: number): Promise<void> {
     if (categoryTypeId == null) return;

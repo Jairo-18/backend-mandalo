@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -10,7 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
 
 /**
@@ -81,13 +83,22 @@ export class PaginatedProductsParamsDto extends ParamsPaginationDto {
   categoryTypeId?: number;
 }
 
-/** Quitar una foto del producto (URL tal como está guardada en `images`). */
+/**
+ * Quitar una o varias fotos del producto (URLs tal como están guardadas en
+ * `images`) — una sola petición aunque se hayan quitado varias en el mismo
+ * guardado del formulario, en vez de un DELETE por foto.
+ */
 export class RemoveProductImageDto {
   @ApiProperty({
-    description: 'URL de la imagen a quitar del producto',
-    example: 'https://apidev.somosmandalo.com/uploads/products/uuid.webp',
+    description: 'URLs de las imágenes a quitar, separadas por coma',
+    example:
+      'https://apidev.somosmandalo.com/uploads/products/a.webp,https://apidev.somosmandalo.com/uploads/products/b.webp',
   })
-  @IsString()
-  @IsNotEmpty()
-  url: string;
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.split(',').filter(Boolean) : value,
+  )
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayNotEmpty()
+  urls: string[];
 }

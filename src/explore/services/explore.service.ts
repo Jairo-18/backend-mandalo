@@ -5,6 +5,8 @@ import { OrganizationalRepository } from '../../shared/repositories/organization
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { TagRepository } from '../../shared/repositories/tag.repository';
 import { CategoryTypeRepository } from '../../shared/repositories/categoryType.repository';
+import { DeliveryPricingService } from '../../shared/services/delivery-pricing.service';
+import { InvoiceService } from '../../invoice/services/invoice.service';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { Product } from '../../shared/entities/product.entity';
 import { Tag } from '../../shared/entities/tag.entity';
@@ -12,10 +14,26 @@ import { CategoryType } from '../../shared/entities/categoryType.entity';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import {
+  DeliveryEstimateParamsDto,
   PaginatedExploreOrganizationalsParamsDto,
   PaginatedExploreProductsParamsDto,
 } from '../dtos/explore.dto';
 import { isBusinessOpen } from '../../shared/utils/business-hours.util';
+
+/**
+ * Cotización de domicilio hacia un negocio; todo en null si no tiene
+ * coordenadas guardadas. `deliveryFee` YA incluye los recargos (nocturno,
+ * clima, demanda); `surchargeReasons` es el texto amigable de cuáles aplican
+ * ahora mismo (mismo cálculo que el preview real del checkout, ver
+ * `InvoiceService.previewDeliveryFee`).
+ */
+export type DeliveryEstimate = {
+  organizationalId: number;
+  distanceKm: number | null;
+  deliveryFee: number | null;
+  etaMinutes: number | null;
+  surchargeReasons: string[];
+};
 
 /** Negocio público + bandera calculada de apertura (horario Colombia). */
 type PublicOrganizational = Partial<Organizational> & { isOpen: boolean };
@@ -33,6 +51,8 @@ export class ExploreService {
     private readonly _tagRepository: TagRepository,
     private readonly _categoryTypeRepository: CategoryTypeRepository,
     private readonly _configService: ConfigService,
+    private readonly _deliveryPricingService: DeliveryPricingService,
+    private readonly _invoiceService: InvoiceService,
   ) {}
 
   /** Un negocio es visible si está activo Y tiene al menos un producto activo. */
@@ -220,6 +240,8 @@ export class ExploreService {
         'organizational.legalName',
         'organizational.tradeName',
         'organizational.logoUrl',
+        'organizational.latitude',
+        'organizational.longitude',
         'organizational.openTime',
         'organizational.closeTime',
         'organizational.openDays',
@@ -317,6 +339,52 @@ export class ExploreService {
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
 
     return new ResponsePaginationDto(entities, pagination);
+  }
+
+  /**
+   * Distancia + tarifa de domicilio (con sus recargos) + ETA desde la
+   * ubicación del cliente hasta cada negocio pedido — SIN crear un pedido
+   * (el explorar, estilo Rappi). Reusa el mismo cálculo del preview real del
+   * checkout (`InvoiceService.previewDeliveryFee`) para no duplicar la
+   * lógica de recargo nocturno/clima/demanda ni desincronizarse de ella. Un
+   * negocio sin coordenadas guardadas sale con todo en null (el front decide
+   * si oculta el dato o no).
+   */
+  async deliveryEstimates(
+    params: DeliveryEstimateParamsDto,
+  ): Promise<DeliveryEstimate[]> {
+    return Promise.all(
+      params.organizationalIds.map(async (organizationalId) => {
+        const breakdown = await this._invoiceService.previewDeliveryFee({
+          organizationalId,
+          latitude: params.lat,
+          longitude: params.lng,
+        });
+        if (breakdown.distanceKm == null) {
+          return {
+            organizationalId,
+            distanceKm: null,
+            deliveryFee: null,
+            etaMinutes: null,
+            surchargeReasons: [],
+          };
+        }
+        return {
+          organizationalId,
+          // 2 decimales (~10m de precisión): el front decide si lo muestra
+          // en metros (<1km) o en km, y con 1 sola cifra ya se perdía la
+          // diferencia entre, por ej., 300m y 400m.
+          distanceKm: breakdown.distanceKm,
+          deliveryFee:
+            Math.round((breakdown.deliveryFee + breakdown.deliverySurcharge) * 100) /
+            100,
+          etaMinutes: this._deliveryPricingService.estimateMinutesForDistance(
+            breakdown.distanceKm,
+          ),
+          surchargeReasons: breakdown.surchargeReasons,
+        };
+      }),
+    );
   }
 
   // ---------- helpers ----------

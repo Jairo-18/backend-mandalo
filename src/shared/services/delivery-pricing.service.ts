@@ -77,6 +77,18 @@ export class DeliveryPricingService {
   }
 
   /**
+   * Minutos estimados de entrega para una distancia dada: línea recta ×
+   * factor de ruta real (1.3) a ~25 km/h de moto urbana + 5 min de margen,
+   * acotado a 10–90 min. Misma cuenta que usa `InvoiceService` para el ETA
+   * del pedido ya creado; acá vive para poder cotizarla también SIN pedido
+   * (p. ej. "cuánto tarda" en el explorar antes de pedir).
+   */
+  estimateMinutesForDistance(distanceKm: number): number {
+    const minutes = Math.round(((distanceKm * 1.3) / 25) * 60) + 5;
+    return Math.min(Math.max(minutes, 10), 90);
+  }
+
+  /**
    * Recargo nocturno del Anexo I (§59): entre 11:00pm y 5:30am hora de
    * Bogotá (offset fijo -5, Colombia no tiene horario de verano). 0 si no
    * aplica. Recibe `at` para poder probarlo con una hora fija en tests.

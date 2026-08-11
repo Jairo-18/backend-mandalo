@@ -133,7 +133,7 @@ export class ProductController {
     };
   }
 
-  /** Quita una foto del producto (query `url` con la URL guardada). */
+  /** Quita una o varias fotos del producto (query `urls` separadas por coma). */
   @Delete(':id/image')
   @RemoveProductImageDocs()
   async removeImage(
@@ -141,7 +141,7 @@ export class ProductController {
     @Param('id', ParseIntPipe) id: number,
     @Query() query: RemoveProductImageDto,
   ) {
-    const data = await this._productUC.removeImage(user, id, query.url);
+    const data = await this._productUC.removeImages(user, id, query.urls);
     return {
       statusCode: HttpStatus.OK,
       message: 'Foto eliminada exitosamente',

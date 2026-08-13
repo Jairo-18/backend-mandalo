@@ -18,6 +18,7 @@ import { Organizational } from '../../shared/entities/organizational.entity';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 import { UserService } from '../../user/services/user.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
+import { GeocodingService } from '../../shared/services/geocoding.service';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import {
@@ -49,6 +50,7 @@ export class OrganizationalService {
     private readonly _localStorageService: LocalStorageService,
     private readonly _invoiceRepository: InvoiceRepository,
     private readonly _productRepository: ProductRepository,
+    private readonly _geocodingService: GeocodingService,
   ) {}
 
   async create(dto: CreateOrganizationalDto): Promise<Organizational> {
@@ -497,5 +499,23 @@ export class OrganizationalService {
       throw new BadRequestException('Alguna de las etiquetas no existe');
     }
     return tags;
+  }
+
+  /**
+   * Ubicación del negocio (selector de mapa del admin): las 3 vías delegan
+   * al `GeocodingService` compartido (Nominatim + resolución de links
+   * cortos de Google Maps), igual que el resto de integraciones externas
+   * de este service (p. ej. `LocalStorageService`).
+   */
+  resolveMapsUrl(url: string): Promise<string | null> {
+    return this._geocodingService.resolveShortLink(url);
+  }
+
+  searchAddress(query: string) {
+    return this._geocodingService.searchAddress(query);
+  }
+
+  reverseGeocode(latitude: number, longitude: number): Promise<string | null> {
+    return this._geocodingService.reverseGeocode(latitude, longitude);
   }
 }

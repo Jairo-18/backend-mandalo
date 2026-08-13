@@ -9,6 +9,7 @@ import { MailTemplateService } from './services/mail-template.service';
 import { PushService } from './services/push.service';
 import { DeliveryPricingService } from './services/delivery-pricing.service';
 import { WeatherService } from './services/weather.service';
+import { GeocodingService } from './services/geocoding.service';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from './entities/user.entity';
 import { AccessSessions } from './entities/accessSessions.entity';
@@ -166,6 +167,7 @@ export class SharedModule {
         PushService,
         DeliveryPricingService,
         WeatherService,
+        GeocodingService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,
@@ -197,6 +199,7 @@ export class SharedModule {
         PushService,
         DeliveryPricingService,
         WeatherService,
+        GeocodingService,
         UserRepository,
         AccessSessionsRepository,
         OrganizationalRepository,

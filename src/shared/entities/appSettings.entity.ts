@@ -61,6 +61,20 @@ export class AppSettings {
   @Column('varchar', { length: 80, nullable: true })
   arlPolicyNumber?: string | null;
 
+  // Redes y contacto públicos (se muestran en login/registro y en "Ayuda" de
+  // los 4 roles) — el admin los carga una sola vez desde "Aplicación".
+  @Column('varchar', { length: 300, nullable: true })
+  youtubeUrl?: string | null;
+
+  @Column('varchar', { length: 300, nullable: true })
+  facebookUrl?: string | null;
+
+  @Column('varchar', { length: 300, nullable: true })
+  instagramUrl?: string | null;
+
+  @Column('varchar', { length: 30, nullable: true })
+  contactPhone?: string | null;
+
   @UpdateDateColumn({ type: 'timestamp', nullable: true })
   updatedAt?: Date;
 }

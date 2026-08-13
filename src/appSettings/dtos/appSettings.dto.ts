@@ -81,4 +81,41 @@ export class UpdateAppSettingsDto {
   @IsString()
   @MaxLength(80)
   arlPolicyNumber?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://youtube.com/@mandalo',
+    maxLength: 300,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  youtubeUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://facebook.com/mandalo',
+    maxLength: 300,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  facebookUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://instagram.com/mandalo',
+    maxLength: 300,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  instagramUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Teléfono de contacto público (soporte/atención al cliente)',
+    example: '+57 300 123 4567',
+    maxLength: 30,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  contactPhone?: string;
 }

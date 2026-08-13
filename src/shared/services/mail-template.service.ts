@@ -354,6 +354,73 @@ export class MailTemplateService {
   }
 
   /**
+   * Invitación a la prueba anticipada de Google Play (closed testing): a
+   * diferencia de `bulkInviteWelcomeTemplate` (crea la cuenta y manda su
+   * contraseña) este correo NO crea nada — solo pide entrar al listado de
+   * Play Store, instalar y unirse como tester. Google exige un mínimo de
+   * testers "opt-in" activos 14 días seguidos antes de aprobar la app para
+   * producción; cuantos más acepten, más rápido se cumple ese requisito.
+   */
+  async playTestInviteTemplate(
+    playStoreUrl: string,
+    bannerSrc: string = `cid:${MANDALO_BANNER_CID}`,
+  ) {
+    const BRAND = await this.resolveBrand();
+    return `
+      <div style="margin: 0; padding: 0; background-color: ${BRAND.surface}; font-family: 'Helvetica', Arial, sans-serif; width: 100%;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${BRAND.surface}; padding: 40px 10px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                ${bannerRow(bannerSrc)}
+                <tr>
+                  <td style="padding: 34px 30px 40px;">
+                    <div style="text-align: center; margin-bottom: 26px;">
+                      <h2 style="color: ${BRAND.dark}; margin: 0; font-size: 20px; font-weight: 700;">🎉 Ya eres parte de la prueba anticipada de ${BRAND.name}</h2>
+                    </div>
+                    <p style="color: ${BRAND.muted}; font-size: 16px; line-height: 24px; margin-bottom: 20px;">
+                      ¡Hola!
+                    </p>
+                    <p style="color: ${BRAND.muted}; font-size: 16px; line-height: 24px; margin-bottom: 25px;">
+                      <strong style="color: ${BRAND.dark};">${BRAND.name}</strong> es la nueva app de domicilios de Mocoa y el Putumayo, y te escribimos porque quedaste seleccionado(a) para probarla antes que nadie 🙌.
+                    </p>
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${playStoreUrl}" target="_blank"
+                        style="background-color: ${BRAND.primary}; color: #ffffff; padding: 15px 40px; text-decoration: none; border-radius: 30px; font-weight: 700; font-size: 16px; display: inline-block;">
+                        Entrar a Google Play
+                      </a>
+                    </div>
+                    <p style="color: ${BRAND.muted}; font-size: 14px; line-height: 21px; margin-bottom: 20px;">
+                      Abre el link <strong style="color: ${BRAND.dark};">desde el mismo correo de Google a donde te llegó esta invitación</strong> (importante: si entras con otra cuenta, Play Store no te va a dejar instalarla todavía) e instala la app.
+                    </p>
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background: #FFF3EE; border-radius: 14px; margin-bottom: 10px;">
+                      <tr>
+                        <td style="padding: 18px 22px;">
+                          <p style="margin: 0; color: ${BRAND.dark}; font-size: 14px; line-height: 21px;">
+                            🙏 Te pedimos el favor de <strong>registrarte y aceptar ser tester</strong> — Google exige que un grupo de personas reales pruebe la app un tiempo antes de aprobarla para todo el público. Con tu ayuda llegamos más rápido a esa meta.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="color: ${BRAND.muted}; font-size: 13px; line-height: 20px; margin-bottom: 0;">
+                      Cualquier duda para instalarla o registrarte, responde este correo y te ayudamos. ¡Gracias por ser parte de esto!
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: ${BRAND.dark}; padding: 18px 30px; text-align: center;">
+                    <p style="color: #ffffff; font-size: 12px; margin: 0;">© ${BRAND.name} — ${BRAND.slogan}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
    * Página HTML que ve el usuario al abrir el enlace de "eliminar mi cuenta"
    * (mismo patrón que `verifyEmailResultPage` — ver esa nota, aplica igual).
    */

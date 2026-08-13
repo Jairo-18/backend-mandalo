@@ -71,4 +71,16 @@ export class OrganizationalUC {
   removeMyPaymentQr(userId: string) {
     return this._organizationalService.removeMyPaymentQr(userId);
   }
+
+  resolveMapsUrl(url: string) {
+    return this._organizationalService.resolveMapsUrl(url);
+  }
+
+  searchAddress(query: string) {
+    return this._organizationalService.searchAddress(query);
+  }
+
+  reverseGeocode(latitude: number, longitude: number) {
+    return this._organizationalService.reverseGeocode(latitude, longitude);
+  }
 }

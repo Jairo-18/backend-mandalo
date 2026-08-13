@@ -53,7 +53,7 @@ export class AppSettingsController {
     await this._appSettingsUC.update(body);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Colores actualizados exitosamente',
+      message: 'Configuración actualizada exitosamente',
     };
   }
 }

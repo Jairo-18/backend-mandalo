@@ -12,6 +12,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
   Matches,
   Max,
   MaxLength,
@@ -260,4 +261,40 @@ export class PaginatedOrganizationalsParamsDto extends ParamsPaginationDto {
   @Type(() => Number)
   @IsInt()
   identificationTypeId?: number;
+}
+
+/**
+ * Link "Compartir" de Google Maps (acortado `maps.app.goo.gl`/`goo.gl`/`g.co`)
+ * a resolver del lado del servidor — el navegador no puede seguir la
+ * redirección él mismo por CORS (Google no manda `Access-Control-Allow-Origin`).
+ */
+export class ResolveMapsUrlDto {
+  @ApiProperty({ example: 'https://maps.app.goo.gl/AbCdEfGhIjK' })
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(2000)
+  url: string;
+}
+
+/** Texto libre para buscar una dirección/lugar (selector de mapa del admin). */
+export class SearchAddressDto {
+  @ApiProperty({ example: 'Cra 5 # 10-23, Villagarzón, Putumayo' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  q: string;
+}
+
+/** Coordenadas del pin movido a mano en el mapa (geocodificación inversa). */
+export class ReverseGeocodeDto {
+  @ApiProperty({ example: 1.0287 })
+  @Type(() => Number)
+  @IsLatitude()
+  latitude: number;
+
+  @ApiProperty({ example: -76.6167 })
+  @Type(() => Number)
+  @IsLongitude()
+  longitude: number;
 }

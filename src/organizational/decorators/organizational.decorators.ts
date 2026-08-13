@@ -21,6 +21,38 @@ export function CreateOrganizationalDocs() {
   );
 }
 
+export function ResolveMapsUrlDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary:
+        'Resuelve un link acortado "Compartir" de Google Maps (sigue la redirección del lado del servidor)',
+    }),
+    ApiOkResponse(),
+  );
+}
+
+export function SearchAddressDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary:
+        'Busca una dirección/lugar (Nominatim/OpenStreetMap) para el selector de ubicación',
+    }),
+    ApiOkResponse(),
+  );
+}
+
+export function ReverseGeocodeDocs() {
+  return applyDecorators(
+    ApiBearerAuth(),
+    ApiOperation({
+      summary: 'Dirección legible para unas coordenadas (pin movido en el mapa)',
+    }),
+    ApiOkResponse(),
+  );
+}
+
 export function GetPaginatedOrganizationalsDocs() {
   return applyDecorators(
     ApiBearerAuth(),

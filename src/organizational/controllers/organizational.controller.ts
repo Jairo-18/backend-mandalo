@@ -20,6 +20,9 @@ import { OrganizationalUC } from '../useCases/organizational.uc';
 import {
   CreateOrganizationalDto,
   PaginatedOrganizationalsParamsDto,
+  ResolveMapsUrlDto,
+  ReverseGeocodeDto,
+  SearchAddressDto,
   UpdateOrganizationalDto,
 } from '../dtos/organizational.dto';
 import {
@@ -41,6 +44,9 @@ import {
   FindOneOrganizationalDocs,
   UpdateMineOrganizationalDocs,
   GetPaginatedOrganizationalsDocs,
+  ResolveMapsUrlDocs,
+  SearchAddressDocs,
+  ReverseGeocodeDocs,
   UpdateOrganizationalDocs,
   UploadLogoDocs,
   UploadPaymentQrDocs,
@@ -164,6 +170,52 @@ export class OrganizationalController {
       statusCode: HttpStatus.OK,
       message: 'QR de pago eliminado exitosamente',
     };
+  }
+
+  /**
+   * Link "Compartir" acortado de Google Maps → URL final ya con coordenadas.
+   * El front la parsea con la misma lógica de siempre (`extractCoordsFromMapsUrl`).
+   * OJO: debe declararse ANTES de `:id` para que no caiga en el ParseIntPipe.
+   */
+  @Get('resolve-maps-url')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @ResolveMapsUrlDocs()
+  async resolveMapsUrl(@Query() query: ResolveMapsUrlDto) {
+    const finalUrl = await this._organizationalUC.resolveMapsUrl(query.url);
+    return {
+      statusCode: HttpStatus.OK,
+      data: { finalUrl },
+    };
+  }
+
+  /**
+   * Buscar dirección/lugar (Nominatim) → candidatos con coordenadas.
+   * OJO: debe declararse ANTES de `:id` para que no caiga en el ParseIntPipe.
+   */
+  @Get('search-address')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @SearchAddressDocs()
+  async searchAddress(@Query() query: SearchAddressDto) {
+    const data = await this._organizationalUC.searchAddress(query.q);
+    return { statusCode: HttpStatus.OK, data };
+  }
+
+  /**
+   * Coordenadas → dirección legible (pin movido a mano en el mapa).
+   * OJO: debe declararse ANTES de `:id` para que no caiga en el ParseIntPipe.
+   */
+  @Get('reverse-geocode')
+  @UseGuards(RolesGuard)
+  @Roles(RoleTypeCode.ADMIN)
+  @ReverseGeocodeDocs()
+  async reverseGeocode(@Query() query: ReverseGeocodeDto) {
+    const label = await this._organizationalUC.reverseGeocode(
+      query.latitude,
+      query.longitude,
+    );
+    return { statusCode: HttpStatus.OK, data: { label } };
   }
 
   @Get(':id')

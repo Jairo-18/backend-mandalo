@@ -94,7 +94,7 @@ export class AuthService {
         googleId: payload.sub,
         email: payload.email,
         fullName: payload.name || payload.email.split('@')[0],
-        avatarUrl: payload.picture,
+        avatarUrl: this.upsizeGoogleAvatar(payload.picture),
       },
       roleCode,
     );
@@ -115,13 +115,25 @@ export class AuthService {
       googleId: payload.sub,
       email: payload.email,
       fullName: payload.name || payload.email.split('@')[0],
-      avatarUrl: payload.picture,
+      avatarUrl: this.upsizeGoogleAvatar(payload.picture),
     });
   }
 
   /** Quita el vínculo con Google (queda el acceso por correo + contraseña). */
   async unlinkGoogle(userId: string): Promise<void> {
     await this._userService.unlinkGoogleAccount(userId);
+  }
+
+  /**
+   * Google entrega la foto de perfil en baja resolución por defecto
+   * (`...=s96-c`) — mismo archivo, pero pedirlo con un tamaño mayor por ese
+   * parámetro de la URL lo sirve nítido sin volver a subir nada (bug
+   * reportado 2026-08-13: avatares borrosos de clientes/domiciliarios que
+   * entraron por Google). Si la URL no trae ese patrón, se deja tal cual.
+   */
+  private upsizeGoogleAvatar(url: string | undefined): string | undefined {
+    if (!url) return url;
+    return url.replace(/=s\d+-c$/, '=s400-c');
   }
 
   /** Verifica un idToken de Google contra los client ids configurados. */

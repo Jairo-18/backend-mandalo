@@ -109,7 +109,7 @@ export class PushService {
     }
   }
 
-  /** Push a todos los ADMIN (ej. un repartidor reporta un accidente). */
+  /** Push a todos los ADMIN/SUPERADMIN (ej. un repartidor reporta un accidente). */
   async sendToAdmins(notification: PushNotification): Promise<void> {
     try {
       const tokens = await this._pushTokenRepository
@@ -118,8 +118,8 @@ export class PushService {
         .innerJoin(
           'roleType',
           'rt',
-          'rt."id" = u."roleTypeId" AND rt."code" = :code',
-          { code: RoleTypeCode.ADMIN },
+          'rt."id" = u."roleTypeId" AND rt."code" IN (:...codes)',
+          { codes: [RoleTypeCode.ADMIN, RoleTypeCode.SUPERADMIN] },
         )
         .where('u."isActive" = true AND u."isBanned" = false')
         .getMany();

@@ -67,9 +67,10 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @CreateOrganizationalDocs()
   async create(
+    @GetUser() user: User,
     @Body() body: CreateOrganizationalDto,
   ): Promise<CreatedRecordResponseDto> {
-    const organizational = await this._organizationalUC.create(body);
+    const organizational = await this._organizationalUC.create(body, user);
     return {
       statusCode: HttpStatus.CREATED,
       message: 'Negocio creado exitosamente',
@@ -82,9 +83,10 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @GetPaginatedOrganizationalsDocs()
   async getPaginated(
+    @GetUser() user: User,
     @Query() params: PaginatedOrganizationalsParamsDto,
   ): Promise<ResponsePaginationDto<Organizational>> {
-    return this._organizationalUC.paginatedList(params);
+    return this._organizationalUC.paginatedList(user, params);
   }
 
   /**
@@ -222,8 +224,11 @@ export class OrganizationalController {
   @UseGuards(RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
   @FindOneOrganizationalDocs()
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const organizational = await this._organizationalUC.findOne(id);
+  async findOne(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const organizational = await this._organizationalUC.findOne(id, user);
     return {
       statusCode: HttpStatus.OK,
       data: organizational,
@@ -235,10 +240,11 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @UpdateOrganizationalDocs()
   async update(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateOrganizationalDto,
   ): Promise<UpdateRecordResponseDto> {
-    await this._organizationalUC.update(id, body);
+    await this._organizationalUC.update(id, body, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'Negocio actualizado exitosamente',
@@ -250,9 +256,10 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @DeleteOrganizationalDocs()
   async delete(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<DeleteRecordResponseDto> {
-    await this._organizationalUC.delete(id);
+    await this._organizationalUC.delete(id, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'Negocio eliminado exitosamente',
@@ -266,10 +273,11 @@ export class OrganizationalController {
   @UploadLogoDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadLogo(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const data = await this._organizationalUC.updateLogo(id, file);
+    const data = await this._organizationalUC.updateLogo(id, file, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'Logo actualizado exitosamente',
@@ -283,9 +291,10 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @RemoveLogoDocs()
   async removeLogo(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<DeleteRecordResponseDto> {
-    await this._organizationalUC.removeLogo(id);
+    await this._organizationalUC.removeLogo(id, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'Logo eliminado exitosamente',
@@ -299,10 +308,11 @@ export class OrganizationalController {
   @UploadPaymentQrDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadPaymentQr(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const data = await this._organizationalUC.updatePaymentQr(id, file);
+    const data = await this._organizationalUC.updatePaymentQr(id, file, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago actualizado exitosamente',
@@ -316,9 +326,10 @@ export class OrganizationalController {
   @Roles(RoleTypeCode.ADMIN)
   @RemovePaymentQrDocs()
   async removePaymentQr(
+    @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<DeleteRecordResponseDto> {
-    await this._organizationalUC.removePaymentQr(id);
+    await this._organizationalUC.removePaymentQr(id, user);
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago eliminado exitosamente',

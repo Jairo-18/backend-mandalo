@@ -14,6 +14,7 @@ import {
 } from '../dtos/user.dto';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { User } from '../../shared/entities/user.entity';
 
 @Injectable()
 export class UserUC {
@@ -22,8 +23,8 @@ export class UserUC {
     private readonly _crudUserService: CrudUserService,
   ) {}
 
-  create(dto: CreateUserDto) {
-    return this._userService.create(dto);
+  create(dto: CreateUserDto, admin?: User) {
+    return this._userService.create(dto, admin);
   }
 
   bulkInvite(dto: BulkInviteUsersDto) {
@@ -46,16 +47,16 @@ export class UserUC {
     return this._userService.resendVerification(email);
   }
 
-  findOne(id: string) {
-    return this._userService.findOne(id);
+  findOne(id: string, admin?: User) {
+    return this._userService.findOne(id, admin);
   }
 
-  paginatedList(params: PaginatedUsersParamsDto) {
-    return this._crudUserService.paginatedList(params);
+  paginatedList(admin: User, params: PaginatedUsersParamsDto) {
+    return this._crudUserService.paginatedList(admin, params);
   }
 
-  update(id: string, dto: UpdateUserDto) {
-    return this._userService.update(id, dto);
+  update(id: string, dto: UpdateUserDto, admin?: User) {
+    return this._userService.update(id, dto, admin);
   }
 
   /** Edición del propio perfil (DTO restringido, sin campos de admin). */
@@ -90,8 +91,8 @@ export class UserUC {
     );
   }
 
-  delete(id: string) {
-    return this._userService.delete(id);
+  delete(id: string, admin?: User) {
+    return this._userService.delete(id, admin);
   }
 
   requestSelfDeletion(id: string) {
@@ -110,11 +111,11 @@ export class UserUC {
     return this._userService.confirmDeletionByToken(userId, token);
   }
 
-  updateAvatar(id: string, file: Express.Multer.File) {
-    return this._userService.updateAvatar(id, file);
+  updateAvatar(id: string, file: Express.Multer.File, admin?: User) {
+    return this._userService.updateAvatar(id, file, admin);
   }
 
-  removeAvatar(id: string) {
-    return this._userService.removeAvatar(id);
+  removeAvatar(id: string, admin?: User) {
+    return this._userService.removeAvatar(id, admin);
   }
 }

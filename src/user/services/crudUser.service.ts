@@ -5,12 +5,15 @@ import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import { UserPaginatedListItem } from '../interfaces/user.interface';
 import { User } from '../../shared/entities/user.entity';
+import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { isSuperAdmin } from '../../shared/utils/municipality-scope.util';
 
 @Injectable()
 export class CrudUserService {
   constructor(private readonly _userRepository: UserRepository) {}
 
   async paginatedList(
+    admin: User,
     params: PaginatedUsersParamsDto,
   ): Promise<ResponsePaginationDto<UserPaginatedListItem>> {
     const page = params.page ?? 1;
@@ -26,6 +29,29 @@ export class CrudUserService {
       .skip(skip)
       .take(perPage)
       .orderBy('user.createdAt', params.order ?? 'ASC');
+
+    // Admin regional (no SUPERADMIN): nunca ve cuentas ADMIN/SUPERADMIN;
+    // Cliente/Domiciliario se filtran por su propio municipio, Negocio por
+    // el municipio de AL MENOS UNO de sus negocios (EXISTS, no JOIN: un
+    // dueño puede tener varios negocios — un JOIN normal duplicaría la fila
+    // por cada uno que calce). SUPERADMIN ve todo, sin este filtro.
+    if (!isSuperAdmin(admin)) {
+      query.andWhere(
+        `(
+          (roleType.code IN (:...directRoles) AND "user"."municipalityId" = :scopeMunicipalityId)
+          OR (roleType.code = :businessRole AND EXISTS (
+            SELECT 1 FROM organizational "ownedOrg"
+            WHERE "ownedOrg"."legalPersonId" = "user"."id"
+              AND "ownedOrg"."municipalityId" = :scopeMunicipalityId
+          ))
+        )`,
+        {
+          directRoles: [RoleTypeCode.CLIENT, RoleTypeCode.DELIVERY],
+          businessRole: RoleTypeCode.BUSINESS,
+          scopeMunicipalityId: admin.municipalityId,
+        },
+      );
+    }
 
     if (params.email) {
       query.andWhere('user.email ILIKE :email', {

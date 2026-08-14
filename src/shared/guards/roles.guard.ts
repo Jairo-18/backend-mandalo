@@ -29,7 +29,12 @@ export class RolesGuard implements CanActivate {
       );
     }
 
-    const hasRole = requiredRoles.includes(roleCode as RoleTypeCode);
+    // SUPERADMIN satisface cualquier ruta que pida ADMIN — un solo lugar
+    // para no tener que agregar SUPERADMIN a cada `@Roles(ADMIN)` suelto.
+    const hasRole =
+      requiredRoles.includes(roleCode as RoleTypeCode) ||
+      (roleCode === RoleTypeCode.SUPERADMIN &&
+        requiredRoles.includes(RoleTypeCode.ADMIN));
     if (!hasRole) {
       throw new ForbiddenException(
         'No tienes permisos para realizar esta acción',

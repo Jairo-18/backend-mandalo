@@ -4,17 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { DeliveryAccidentRepository } from '../../shared/repositories/deliveryAccident.repository';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { AppSettingsRepository } from '../../shared/repositories/appSettings.repository';
 import { DeliveryAccident } from '../../shared/entities/deliveryAccident.entity';
 import { User } from '../../shared/entities/user.entity';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { PushService } from '../../shared/services/push.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
+import {
+  applyMunicipalityScope,
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 import {
   PaginatedAccidentsParamsDto,
   ReportAccidentDto,
@@ -111,10 +115,13 @@ export class DeliveryAccidentService {
       .createQueryBuilder('accident')
       .leftJoinAndSelect('accident.deliveryUser', 'deliveryUser')
       .leftJoinAndSelect('accident.invoice', 'invoice')
+      .leftJoin('invoice.organizational', 'organizational')
       .orderBy('accident.reviewedAt', 'ASC', 'NULLS FIRST')
       .addOrderBy('accident.createdAt', 'DESC')
       .skip((page - 1) * perPage)
       .take(perPage);
+    // Admin regional: solo accidentes de pedidos del negocio de SU municipio.
+    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
 
     if (params.onlyPending === true) {
       query.andWhere('accident.reviewedAt IS NULL');
@@ -132,33 +139,52 @@ export class DeliveryAccidentService {
   /** Cuántos accidentes están sin revisar (badge del sidebar admin). */
   async unreviewedCount(user: User): Promise<number> {
     this.assertAdmin(user);
-    return this._accidentRepository.count({
-      where: { reviewedAt: IsNull() },
-    });
+    const query = this._accidentRepository
+      .createQueryBuilder('accident')
+      .leftJoin('accident.invoice', 'invoice')
+      .leftJoin('invoice.organizational', 'organizational')
+      .where('accident.reviewedAt IS NULL');
+    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+    return query.getCount();
   }
 
   async findOne(user: User, id: number): Promise<DeliveryAccident> {
     this.assertAdmin(user);
     const accident = await this._accidentRepository.findOne({
       where: { id },
-      relations: ['deliveryUser', 'invoice', 'invoice.details', 'reviewedByAdmin'],
+      relations: [
+        'deliveryUser',
+        'invoice',
+        'invoice.organizational',
+        'invoice.details',
+        'reviewedByAdmin',
+      ],
     });
     if (!accident) throw new NotFoundException('Reporte no encontrado');
+    // Admin regional: solo accidentes de pedidos del negocio de SU municipio
+    // (evita adivinar/probar ids de otro municipio por fuera de su lista).
+    if (
+      isOutsideMunicipalityScope(
+        accident.invoice?.organizational?.municipalityId,
+        scopeMunicipalityIdFor(user),
+      )
+    ) {
+      throw new ForbiddenException('No tienes acceso a este reporte.');
+    }
     return accident;
   }
 
   /** "Procesar accidente" — el admin marca que ya lo atendió. */
   async review(user: User, id: number): Promise<DeliveryAccident> {
-    this.assertAdmin(user);
-    const accident = await this._accidentRepository.findOne({ where: { id } });
-    if (!accident) throw new NotFoundException('Reporte no encontrado');
+    // Reusa `findOne` (ya valida admin + alcance de municipio).
+    const accident = await this.findOne(user, id);
     accident.reviewedAt = new Date();
     accident.reviewedByAdminId = user.id;
     return this._accidentRepository.save(accident);
   }
 
   private assertAdmin(user: User): void {
-    if (user.roleType?.code !== RoleTypeCode.ADMIN) {
+    if (!isAdminRole(user.roleType?.code)) {
       throw new ForbiddenException('Solo el administrador puede ver esto.');
     }
   }

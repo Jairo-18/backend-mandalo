@@ -205,6 +205,11 @@ export class AuthService {
         fullName: user.fullName,
         roleTypeId: user.roleTypeId,
         role: this.toRolePayload(user),
+        // Solo ADMIN: municipio de la cuenta (regional) o null (superadmin,
+        // sin restricción) — el front lo usa para el alcance del panel.
+        municipality: user.municipality
+          ? { id: user.municipality.id, name: user.municipality.name }
+          : null,
         avatarUrl: user.avatarUrl ?? null,
         // El front decide con esto si un DELI entra al panel o a la pantalla
         // "Cuenta en proceso de habilitación" (+ la nota del admin).
@@ -306,6 +311,11 @@ export class AuthService {
         fullName: user.fullName,
         roleTypeId: user.roleTypeId,
         role: this.toRolePayload(user),
+        // Solo ADMIN: municipio de la cuenta (regional) o null (superadmin,
+        // sin restricción) — el front lo usa para el alcance del panel.
+        municipality: user.municipality
+          ? { id: user.municipality.id, name: user.municipality.name }
+          : null,
         avatarUrl: user.avatarUrl ?? null,
         // Igual que el sign-in: el auto-login refresca el estado de
         // habilitación del repartidor (y la nota del admin) al abrir la app.

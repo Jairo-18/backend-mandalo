@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrganizationalService } from '../services/organizational.service';
+import { User } from '../../shared/entities/user.entity';
 import {
   CreateOrganizationalDto,
   PaginatedOrganizationalsParamsDto,
@@ -12,12 +13,12 @@ export class OrganizationalUC {
     private readonly _organizationalService: OrganizationalService,
   ) {}
 
-  create(dto: CreateOrganizationalDto) {
-    return this._organizationalService.create(dto);
+  create(dto: CreateOrganizationalDto, admin?: User) {
+    return this._organizationalService.create(dto, admin);
   }
 
-  findOne(id: number) {
-    return this._organizationalService.findOne(id);
+  findOne(id: number, admin?: User) {
+    return this._organizationalService.findOne(id, admin);
   }
 
   findMine(userId: string) {
@@ -32,40 +33,40 @@ export class OrganizationalUC {
     return this._organizationalService.updateMyLogo(userId, file);
   }
 
-  paginatedList(params: PaginatedOrganizationalsParamsDto) {
-    return this._organizationalService.paginatedList(params);
+  paginatedList(admin: User, params: PaginatedOrganizationalsParamsDto) {
+    return this._organizationalService.paginatedList(admin, params);
   }
 
-  update(id: number, dto: UpdateOrganizationalDto) {
-    return this._organizationalService.update(id, dto);
+  update(id: number, dto: UpdateOrganizationalDto, admin?: User) {
+    return this._organizationalService.update(id, dto, admin);
   }
 
-  delete(id: number) {
-    return this._organizationalService.delete(id);
+  delete(id: number, admin?: User) {
+    return this._organizationalService.delete(id, admin);
   }
 
-  updateLogo(id: number, file: Express.Multer.File) {
-    return this._organizationalService.updateLogo(id, file);
+  updateLogo(id: number, file: Express.Multer.File, admin?: User) {
+    return this._organizationalService.updateLogo(id, file, admin);
   }
 
-  updatePaymentQr(id: number, file: Express.Multer.File) {
-    return this._organizationalService.updatePaymentQr(id, file);
+  updatePaymentQr(id: number, file: Express.Multer.File, admin?: User) {
+    return this._organizationalService.updatePaymentQr(id, file, admin);
   }
 
   updateMyPaymentQr(userId: string, file: Express.Multer.File) {
     return this._organizationalService.updateMyPaymentQr(userId, file);
   }
 
-  removeLogo(id: number) {
-    return this._organizationalService.removeLogo(id);
+  removeLogo(id: number, admin?: User) {
+    return this._organizationalService.removeLogo(id, admin);
   }
 
   removeMyLogo(userId: string) {
     return this._organizationalService.removeMyLogo(userId);
   }
 
-  removePaymentQr(id: number) {
-    return this._organizationalService.removePaymentQr(id);
+  removePaymentQr(id: number, admin?: User) {
+    return this._organizationalService.removePaymentQr(id, admin);
   }
 
   removeMyPaymentQr(userId: string) {

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,7 +16,14 @@ import { IdentificationTypeRepository } from '../../shared/repositories/identifi
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { Organizational } from '../../shared/entities/organizational.entity';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { User } from '../../shared/entities/user.entity';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
+import {
+  applyMunicipalityScope,
+  isOutsideMunicipalityScope,
+  isSuperAdmin,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 import { UserService } from '../../user/services/user.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { GeocodingService } from '../../shared/services/geocoding.service';
@@ -53,13 +61,29 @@ export class OrganizationalService {
     private readonly _geocodingService: GeocodingService,
   ) {}
 
-  async create(dto: CreateOrganizationalDto): Promise<Organizational> {
+  async create(dto: CreateOrganizationalDto, admin?: User): Promise<Organizational> {
     await this.assertRelationsExist(dto);
     if (dto.identificationNumber) {
       await this.assertIdentificationAvailable(dto.identificationNumber);
     }
 
     const { tagIds, accountEmail, accountPassword, ...data } = dto;
+
+    // Admin regional (no SUPERADMIN): el negocio nuevo nace SÍ o SÍ en SU
+    // municipio — si no manda ninguno se le asigna el suyo; si manda uno
+    // distinto, se bloquea (si no, podría "plantar" negocios fuera de su
+    // alcance desde el día 1).
+    if (admin && !isSuperAdmin(admin)) {
+      if (
+        data.municipalityId != null &&
+        data.municipalityId !== admin.municipalityId
+      ) {
+        throw new ForbiddenException(
+          'Solo puedes crear negocios en tu propio municipio.',
+        );
+      }
+      data.municipalityId = admin.municipalityId;
+    }
 
     // Cuenta de acceso del negocio (rol NEGO): correo + contraseña crean el
     // usuario dueño en el mismo paso. Excluyente con vincular uno existente.
@@ -94,13 +118,29 @@ export class OrganizationalService {
     return await this._organizationalRepository.save(organizational);
   }
 
-  async findOne(id: number): Promise<Organizational> {
+  /**
+   * `admin` solo se pasa desde el panel ADMIN (por id) — los caminos de
+   * autoservicio del negocio (`updateMine`/`updateMyLogo`/etc, vía
+   * `findMine`) no lo mandan, así que no se les aplica ningún alcance.
+   */
+  async findOne(id: number, admin?: User): Promise<Organizational> {
     const organizational = await this._organizationalRepository.findOne({
       where: { id },
       relations: RELATIONS,
     });
     if (!organizational) {
       throw new NotFoundException('Negocio no encontrado');
+    }
+    // Admin regional: solo el negocio de SU municipio (evita adivinar/probar
+    // ids de otro municipio por fuera de su lista).
+    if (
+      admin &&
+      isOutsideMunicipalityScope(
+        organizational.municipalityId,
+        scopeMunicipalityIdFor(admin),
+      )
+    ) {
+      throw new ForbiddenException('No tienes acceso a este negocio.');
     }
     return organizational;
   }
@@ -123,6 +163,7 @@ export class OrganizationalService {
   }
 
   async paginatedList(
+    admin: User,
     params: PaginatedOrganizationalsParamsDto,
   ): Promise<ResponsePaginationDto<Organizational>> {
     const page = params.page ?? 1;
@@ -150,6 +191,7 @@ export class OrganizationalService {
       .skip(skip)
       .take(perPage)
       .orderBy('organizational.legalName', params.order ?? 'ASC');
+    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(admin));
 
     if (params.search) {
       const search = `%${params.search.trim()}%`;
@@ -244,9 +286,24 @@ export class OrganizationalService {
   async update(
     id: number,
     dto: UpdateOrganizationalDto,
+    admin?: User,
   ): Promise<Organizational> {
-    const organizational = await this.findOne(id);
+    const organizational = await this.findOne(id, admin);
     await this.assertRelationsExist(dto);
+
+    // Admin regional: no puede "mover" el negocio a otro municipio (ya se
+    // bloqueó en `create` que naciera en otro lado; esto cierra la misma
+    // puerta en edición).
+    if (
+      admin &&
+      !isSuperAdmin(admin) &&
+      dto.municipalityId != null &&
+      dto.municipalityId !== admin.municipalityId
+    ) {
+      throw new ForbiddenException(
+        'Solo puedes asignar negocios a tu propio municipio.',
+      );
+    }
 
     if (
       dto.identificationNumber &&
@@ -282,8 +339,8 @@ export class OrganizationalService {
    * borrar un negocio con pedidos borraría el historial (facturas). Se
    * bloquea con 409 — el camino correcto es desactivarlo.
    */
-  async delete(id: number): Promise<void> {
-    const organizational = await this.findOne(id);
+  async delete(id: number, admin?: User): Promise<void> {
+    const organizational = await this.findOne(id, admin);
     const orders = await this._invoiceRepository.count({
       where: { organizationalId: organizational.id },
     });
@@ -325,8 +382,9 @@ export class OrganizationalService {
   async updateLogo(
     id: number,
     file: Express.Multer.File,
+    admin?: User,
   ): Promise<{ logoUrl: string }> {
-    const organizational = await this.findOne(id);
+    const organizational = await this.findOne(id, admin);
 
     const { imageUrl } = await this._localStorageService.saveImage(
       file,
@@ -351,8 +409,9 @@ export class OrganizationalService {
   async updatePaymentQr(
     id: number,
     file: Express.Multer.File,
+    admin?: User,
   ): Promise<{ bancolombiaQrUrl: string }> {
-    const organizational = await this.findOne(id);
+    const organizational = await this.findOne(id, admin);
 
     const { imageUrl } = await this._localStorageService.saveImage(
       file,
@@ -373,8 +432,8 @@ export class OrganizationalService {
   }
 
   /** Quita el logo del negocio (opcional): borra el archivo y limpia la columna. */
-  async removeLogo(id: number): Promise<void> {
-    const organizational = await this.findOne(id);
+  async removeLogo(id: number, admin?: User): Promise<void> {
+    const organizational = await this.findOne(id, admin);
     const publicId = this._localStorageService.publicIdFromUrl(
       organizational.logoUrl,
     );
@@ -391,8 +450,8 @@ export class OrganizationalService {
   }
 
   /** Quita el QR de Bancolombia (opcional): borra el archivo y limpia la columna. */
-  async removePaymentQr(id: number): Promise<void> {
-    const organizational = await this.findOne(id);
+  async removePaymentQr(id: number, admin?: User): Promise<void> {
+    const organizational = await this.findOne(id, admin);
     const publicId = this._localStorageService.publicIdFromUrl(
       organizational.bancolombiaQrUrl,
     );
@@ -477,7 +536,7 @@ export class OrganizationalService {
     if (!user) return; // assertRelationsExist ya validó que exista
 
     const code = user.roleType?.code;
-    if (code === RoleTypeCode.BUSINESS || code === RoleTypeCode.ADMIN) return;
+    if (code === RoleTypeCode.BUSINESS || isAdminRole(code)) return;
 
     const businessRole = await this._roleTypeRepository.findOne({
       where: { code: RoleTypeCode.BUSINESS },

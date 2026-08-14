@@ -14,7 +14,7 @@ import {
   ParamsPaginationDto,
   ResponsePaginationDto,
 } from '../../shared/dtos/pagination.dto';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { PushService } from '../../shared/services/push.service';
 import { InvoiceGateway } from '../../invoice/invoice.gateway';
@@ -315,7 +315,7 @@ export class ChatService {
   /** Cliente dueño, repartidor asignado o admin (lectura de soporte). */
   private assertCanView(user: User, invoice: Invoice): void {
     const roleCode = user.roleType?.code;
-    if (roleCode === RoleTypeCode.ADMIN) return;
+    if (isAdminRole(roleCode)) return;
     if (invoice.userId === user.id) return;
     if (invoice.deliveryUserId === user.id) return;
     throw new ForbiddenException('No tienes acceso a este chat.');

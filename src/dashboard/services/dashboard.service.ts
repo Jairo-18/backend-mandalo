@@ -8,8 +8,12 @@ import { OrganizationalRepository } from '../../shared/repositories/organization
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { User } from '../../shared/entities/user.entity';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
+import {
+  applyMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 
 export type AdminDashboardStats = {
   users: number;
@@ -55,32 +59,49 @@ export class DashboardService {
   ) {}
 
   async adminStats(user: User): Promise<AdminDashboardStats> {
-    this.assertRole(user, RoleTypeCode.ADMIN);
+    if (!isAdminRole(user.roleType?.code)) {
+      throw new ForbiddenException(
+        'No tienes permiso para ver estas estadísticas.',
+      );
+    }
+    // Admin regional: los 7 conteos se escopan a SU municipio; SUPERADMIN
+    // los ve como siempre, sin filtro.
+    const muniId = scopeMunicipalityIdFor(user);
+
+    const businessesQuery = this._organizationalRepository
+      .createQueryBuilder('organizational')
+      .select('COUNT(*)::int', 'count');
+    applyMunicipalityScope(businessesQuery, 'organizational', muniId);
 
     const [
       users,
-      businesses,
+      businessesRow,
       deliveries,
       pendingDeliveries,
       pendingOrders,
       activeOrders,
       serviceFeeRow,
     ] = await Promise.all([
-      this.countByRole(RoleTypeCode.CLIENT),
-      this._organizationalRepository.count(),
-      this.countByRole(RoleTypeCode.DELIVERY),
-      this.countByRole(RoleTypeCode.DELIVERY, { isActive: false }),
-      this.countByState([StateTypeCode.PENDING]),
-      this.countByState(ACTIVE_ORDER_CODES),
-      this._invoiceRepository
-        .createQueryBuilder('invoice')
-        .innerJoin('invoice.stateType', 'stateType')
-        .select('COALESCE(SUM(invoice."serviceFee"), 0)', 'total')
-        .where('stateType.code = :delivered', {
-          delivered: StateTypeCode.DELIVERED,
-        })
-        .getRawOne<{ total: string }>(),
+      this.countByRole(RoleTypeCode.CLIENT, undefined, muniId),
+      businessesQuery.getRawOne<{ count: number }>(),
+      this.countByRole(RoleTypeCode.DELIVERY, undefined, muniId),
+      this.countByRole(RoleTypeCode.DELIVERY, { isActive: false }, muniId),
+      this.countByState([StateTypeCode.PENDING], undefined, muniId),
+      this.countByState(ACTIVE_ORDER_CODES, undefined, muniId),
+      (() => {
+        const q = this._invoiceRepository
+          .createQueryBuilder('invoice')
+          .innerJoin('invoice.stateType', 'stateType')
+          .innerJoin('invoice.organizational', 'organizational')
+          .select('COALESCE(SUM(invoice."serviceFee"), 0)', 'total')
+          .where('stateType.code = :delivered', {
+            delivered: StateTypeCode.DELIVERED,
+          });
+        applyMunicipalityScope(q, 'organizational', muniId);
+        return q.getRawOne<{ total: string }>();
+      })(),
     ]);
+    const businesses = Number(businessesRow?.count ?? 0);
 
     return {
       users,
@@ -122,9 +143,11 @@ export class DashboardService {
 
   // ---------- helpers ----------
 
+  /** `municipalityId`: solo lo manda `adminStats` (CLIENT/DELIVERY, directo). */
   private async countByRole(
     role: RoleTypeCode,
     extra?: { isActive?: boolean },
+    municipalityId?: number | null,
   ): Promise<number> {
     const query = this._userRepository
       .createQueryBuilder('user')
@@ -135,12 +158,19 @@ export class DashboardService {
         isActive: extra.isActive,
       });
     }
+    applyMunicipalityScope(query, 'user', municipalityId);
     return query.getCount();
   }
 
+  /**
+   * `organizationalId`: negocio puntual (dashboard del NEGOCIO).
+   * `municipalityId`: alcance del admin regional (dashboard ADMIN) — join
+   * aparte porque acá no hay un negocio puntual, se compara el del pedido.
+   */
   private async countByState(
     codes: StateTypeCode[],
     organizationalId?: number,
+    municipalityId?: number | null,
   ): Promise<number> {
     const query = this._invoiceRepository
       .createQueryBuilder('invoice')
@@ -150,6 +180,10 @@ export class DashboardService {
       query.andWhere('invoice."organizationalId" = :oid', {
         oid: organizationalId,
       });
+    }
+    if (municipalityId != null) {
+      query.innerJoin('invoice.organizational', 'organizational');
+      applyMunicipalityScope(query, 'organizational', municipalityId);
     }
     return query.getCount();
   }

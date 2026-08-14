@@ -21,10 +21,15 @@ import { User } from '../../shared/entities/user.entity';
 import { StateType } from '../../shared/entities/stateType.entity';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { isBusinessOpen } from '../../shared/utils/business-hours.util';
+import {
+  applyMunicipalityScope,
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 import { PushService } from '../../shared/services/push.service';
 import { DeliveryPricingService } from '../../shared/services/delivery-pricing.service';
 import { WeatherService } from '../../shared/services/weather.service';
@@ -410,17 +415,21 @@ export class InvoiceService {
   async serviceFeeSummary(
     user: User,
   ): Promise<{ total: number; ordersCount: number }> {
-    this.assertRole(user, RoleTypeCode.ADMIN);
+    if (!isAdminRole(user.roleType?.code)) {
+      throw new ForbiddenException('No tienes permiso para esta acción.');
+    }
 
-    const row = await this._invoiceRepository
+    const query = this._invoiceRepository
       .createQueryBuilder('invoice')
       .innerJoin('invoice.stateType', 'stateType')
+      .innerJoin('invoice.organizational', 'organizational')
       .select('COALESCE(SUM(invoice."serviceFee"), 0)', 'total')
       .addSelect('COUNT(*)::int', 'ordersCount')
       .where('stateType.code = :delivered', {
         delivered: StateTypeCode.DELIVERED,
-      })
-      .getRawOne<{ total: string; ordersCount: number }>();
+      });
+    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+    const row = await query.getRawOne<{ total: string; ordersCount: number }>();
 
     return {
       total: this.round2(parseFloat(row?.total ?? '0')),
@@ -465,9 +474,12 @@ export class InvoiceService {
       query.andWhere('invoice.organizationalId = :oid', { oid: org.id });
     } else if (roleCode === RoleTypeCode.DELIVERY) {
       query.andWhere('invoice.deliveryUserId = :did', { did: user.id });
-    } else if (roleCode === RoleTypeCode.ADMIN) {
-      // ADMIN ve todos; filtros opcionales para los cobros por período
-      // (negocio puntual + rango de fechas de ENTREGA en hora local).
+    } else if (isAdminRole(roleCode)) {
+      // ADMIN ve todos, salvo que sea un admin REGIONAL — ahí solo ve los
+      // pedidos del negocio de SU municipio. SUPERADMIN sigue viendo todo.
+      applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+      // Filtros opcionales para los cobros por período (negocio puntual +
+      // rango de fechas de ENTREGA en hora local).
       if (params.organizationalId) {
         query.andWhere('invoice.organizationalId = :adminOid', {
           adminOid: params.organizationalId,
@@ -1183,7 +1195,7 @@ export class InvoiceService {
    */
   private hideCodesFor(user: User, invoice: Invoice): Invoice {
     const role = user.roleType?.code;
-    if (role === RoleTypeCode.ADMIN) return invoice;
+    if (isAdminRole(role)) return invoice;
     const copy = Object.assign(
       Object.create(Object.getPrototypeOf(invoice) as object),
       invoice,
@@ -1422,7 +1434,19 @@ export class InvoiceService {
 
   private async assertCanView(user: User, invoice: Invoice): Promise<void> {
     const roleCode = user.roleType?.code;
-    if (roleCode === RoleTypeCode.ADMIN) return;
+    if (isAdminRole(roleCode)) {
+      // Admin regional: solo pedidos del negocio de SU municipio (evita que
+      // adivine/pruebe ids de pedidos de otro municipio por fuera de su lista).
+      if (
+        isOutsideMunicipalityScope(
+          invoice.organizational?.municipalityId,
+          scopeMunicipalityIdFor(user),
+        )
+      ) {
+        throw new ForbiddenException('No tienes acceso a este pedido.');
+      }
+      return;
+    }
     if (roleCode === RoleTypeCode.CLIENT && invoice.userId === user.id) return;
     if (roleCode === RoleTypeCode.DELIVERY) {
       // El repartidor ve los suyos y los disponibles (para decidir tomarlos).

@@ -9,7 +9,7 @@ import { UserRepository } from '../../shared/repositories/user.repository';
 import { DeliverySettlementRepository } from '../../shared/repositories/deliverySettlement.repository';
 import { DeliverySettlement } from '../../shared/entities/deliverySettlement.entity';
 import { User } from '../../shared/entities/user.entity';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { SettlementPeriodType } from '../../shared/constants/settlementPeriodType.enum';
@@ -17,6 +17,10 @@ import {
   DeliverySettlementPeriodsParamsDto,
   MarkDeliverySettlementDto,
 } from '../dtos/deliverySettlement.dto';
+import {
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 
 /** Totales de UNA quincena (unidad atómica) calculados desde pedidos entregados por el repartidor. */
 interface QuincenaTotals {
@@ -88,7 +92,7 @@ export class DeliverySettlementService {
     params: DeliverySettlementPeriodsParamsDto,
   ): Promise<{ periods: DeliverySettlementPeriodItem[] }> {
     this.assertAdmin(user);
-    await this.assertDeliveryUser(params.deliveryUserId);
+    await this.assertDeliveryUser(params.deliveryUserId, user);
     return this.buildPeriods(params.deliveryUserId, params.periodType);
   }
 
@@ -124,7 +128,7 @@ export class DeliverySettlementService {
     if (dto.periodType !== SettlementPeriodType.QUINCENA) {
       throw new BadRequestException('Solo se puede marcar el pago por quincena.');
     }
-    await this.assertDeliveryUser(dto.deliveryUserId);
+    await this.assertDeliveryUser(dto.deliveryUserId, user);
 
     const existing = await this._deliverySettlementRepository.findOne({
       where: {
@@ -493,7 +497,7 @@ export class DeliverySettlementService {
     return end.toISOString().slice(0, 10);
   }
 
-  private async assertDeliveryUser(id: string): Promise<void> {
+  private async assertDeliveryUser(id: string, admin?: User): Promise<void> {
     const user = await this._userRepository.findOne({
       where: { id },
       relations: ['roleType'],
@@ -501,10 +505,16 @@ export class DeliverySettlementService {
     if (!user || user.roleType?.code !== RoleTypeCode.DELIVERY) {
       throw new NotFoundException('Repartidor no encontrado');
     }
+    if (
+      admin &&
+      isOutsideMunicipalityScope(user.municipalityId, scopeMunicipalityIdFor(admin))
+    ) {
+      throw new ForbiddenException('No tienes acceso a este repartidor.');
+    }
   }
 
   private assertAdmin(user: User): void {
-    if (user.roleType?.code !== RoleTypeCode.ADMIN) {
+    if (!isAdminRole(user.roleType?.code)) {
       throw new ForbiddenException('Solo el administrador puede gestionar los pagos.');
     }
   }

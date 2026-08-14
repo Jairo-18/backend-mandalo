@@ -273,9 +273,10 @@ export class UserController {
   @Roles(RoleTypeCode.ADMIN)
   @CreateUserDocs()
   async create(
+    @GetUser() admin: User,
     @Body() body: CreateUserDto,
   ): Promise<CreatedRecordResponseDto> {
-    const user = await this._userUC.create(body);
+    const user = await this._userUC.create(body, admin);
     return {
       statusCode: HttpStatus.CREATED,
       message: 'Usuario creado exitosamente',
@@ -367,9 +368,10 @@ export class UserController {
   @Roles(RoleTypeCode.ADMIN)
   @GetPaginatedUsersDocs()
   async getPaginated(
+    @GetUser() user: User,
     @Query() params: PaginatedUsersParamsDto,
   ): Promise<ResponsePaginationDto<UserPaginatedListItem>> {
-    return this._userUC.paginatedList(params);
+    return this._userUC.paginatedList(user, params);
   }
 
   /**
@@ -583,8 +585,8 @@ export class UserController {
   @UseGuards(AuthGuard(), RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
   @FindOneUserDocs()
-  async findOne(@Param('id') id: string) {
-    const user = await this._userUC.findOne(id);
+  async findOne(@GetUser() admin: User, @Param('id') id: string) {
+    const user = await this._userUC.findOne(id, admin);
     return {
       statusCode: HttpStatus.OK,
       data: user,
@@ -596,10 +598,11 @@ export class UserController {
   @Roles(RoleTypeCode.ADMIN)
   @UpdateUserDocs()
   async update(
+    @GetUser() admin: User,
     @Param('id') id: string,
     @Body() body: UpdateUserDto,
   ): Promise<UpdateRecordResponseDto> {
-    await this._userUC.update(id, body);
+    await this._userUC.update(id, body, admin);
     return {
       statusCode: HttpStatus.OK,
       message: 'Usuario actualizado exitosamente',
@@ -610,8 +613,11 @@ export class UserController {
   @UseGuards(AuthGuard(), RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
   @DeleteUserDocs()
-  async delete(@Param('id') id: string): Promise<DeleteRecordResponseDto> {
-    await this._userUC.delete(id);
+  async delete(
+    @GetUser() admin: User,
+    @Param('id') id: string,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._userUC.delete(id, admin);
     return {
       statusCode: HttpStatus.OK,
       message: 'Usuario eliminado exitosamente',
@@ -625,10 +631,11 @@ export class UserController {
   @UploadAvatarDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(
+    @GetUser() admin: User,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const data = await this._userUC.updateAvatar(id, file);
+    const data = await this._userUC.updateAvatar(id, file, admin);
     return {
       statusCode: HttpStatus.OK,
       message: 'Foto de perfil actualizada',
@@ -641,8 +648,11 @@ export class UserController {
   @UseGuards(AuthGuard(), RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
   @RemoveAvatarDocs()
-  async removeAvatar(@Param('id') id: string): Promise<DeleteRecordResponseDto> {
-    await this._userUC.removeAvatar(id);
+  async removeAvatar(
+    @GetUser() admin: User,
+    @Param('id') id: string,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._userUC.removeAvatar(id, admin);
     return {
       statusCode: HttpStatus.OK,
       message: 'Foto de perfil eliminada',

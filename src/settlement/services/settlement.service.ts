@@ -10,11 +10,15 @@ import { BusinessSettlementRepository } from '../../shared/repositories/business
 import { BusinessSettlement } from '../../shared/entities/businessSettlement.entity';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { User } from '../../shared/entities/user.entity';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { APP_TIMEZONE } from '../../shared/constants/timezone';
 import { SettlementPeriodType } from '../../shared/constants/settlementPeriodType.enum';
 import { MarkSettlementDto, SettlementPeriodsParamsDto } from '../dtos/settlement.dto';
+import {
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 
 /** Totales de UNA quincena (unidad atómica) calculados desde pedidos ENTREGADOS. */
 interface QuincenaTotals {
@@ -81,7 +85,10 @@ export class SettlementService {
     params: SettlementPeriodsParamsDto,
   ): Promise<{ commissionRate: number; periods: SettlementPeriodItem[] }> {
     this.assertAdmin(user);
-    const organizational = await this.getOrganizational(params.organizationalId);
+    const organizational = await this.getOrganizational(
+      params.organizationalId,
+      user,
+    );
     return this.buildPeriods(organizational, params.periodType);
   }
 
@@ -124,7 +131,10 @@ export class SettlementService {
     if (dto.periodType !== SettlementPeriodType.QUINCENA) {
       throw new BadRequestException('Solo se puede marcar el cobro por quincena.');
     }
-    const organizational = await this.getOrganizational(dto.organizationalId);
+    const organizational = await this.getOrganizational(
+      dto.organizationalId,
+      user,
+    );
 
     const existing = await this._businessSettlementRepository.findOne({
       where: {
@@ -387,14 +397,23 @@ export class SettlementService {
     return end.toISOString().slice(0, 10);
   }
 
-  private async getOrganizational(id: number): Promise<Organizational> {
+  private async getOrganizational(
+    id: number,
+    admin?: User,
+  ): Promise<Organizational> {
     const org = await this._organizationalRepository.findOne({ where: { id } });
     if (!org) throw new NotFoundException('Negocio no encontrado');
+    if (
+      admin &&
+      isOutsideMunicipalityScope(org.municipalityId, scopeMunicipalityIdFor(admin))
+    ) {
+      throw new ForbiddenException('No tienes acceso a este negocio.');
+    }
     return org;
   }
 
   private assertAdmin(user: User): void {
-    if (user.roleType?.code !== RoleTypeCode.ADMIN) {
+    if (!isAdminRole(user.roleType?.code)) {
       throw new ForbiddenException('Solo el administrador puede gestionar los cobros.');
     }
   }

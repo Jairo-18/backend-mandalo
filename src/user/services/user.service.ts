@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -25,7 +26,11 @@ import {
   ResendDeliveryDocumentsDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
-import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
+import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
+import {
+  isOutsideMunicipalityScope,
+  isSuperAdmin,
+} from '../../shared/utils/municipality-scope.util';
 import { MailsService } from '../../shared/services/mails.service';
 import {
   bannerAttachment,
@@ -123,7 +128,11 @@ export class UserService {
     );
   }
 
-  async findOne(id: string): Promise<User> {
+  /**
+   * `admin` solo se pasa desde el panel ADMIN (por id) — `GET /user/me` (el
+   * propio perfil) no lo manda, así que nunca se restringe a sí mismo.
+   */
+  async findOne(id: string, admin?: User): Promise<User> {
     const user = await this._userRepository.findOne({
       where: { id },
       relations: ['roleType', 'municipality', 'department', 'identificationType'],
@@ -131,17 +140,49 @@ export class UserService {
     if (!user) {
       throw new HttpException(NOT_FOUND_MESSAGE, HttpStatus.NOT_FOUND);
     }
+    if (admin) await this.assertUserInScope(admin, user);
     return user;
+  }
+
+  /**
+   * Alcance regional de un admin sobre OTRA cuenta: un ADMIN regional (no
+   * SUPERADMIN) nunca ve/edita cuentas ADMIN/SUPERADMIN (ni siquiera de su
+   * propio municipio), y para el resto compara el municipio según el rol de
+   * la fila — Cliente/Domiciliario por su propio `municipalityId`, Negocio
+   * por el municipio de SU NEGOCIO (no el de su cuenta personal, pedido
+   * explícito del usuario).
+   */
+  private async assertUserInScope(admin: User, target: User): Promise<void> {
+    if (isSuperAdmin(admin)) return; // SUPERADMIN: sin restricción.
+    if (isAdminRole(target.roleType?.code)) {
+      throw new ForbiddenException('No tienes acceso a esta cuenta.');
+    }
+    if (target.roleType?.code === RoleTypeCode.BUSINESS) {
+      // Un dueño puede tener MÁS de un negocio (en municipios distintos):
+      // basta con que UNO esté en el municipio del admin, no solo "el
+      // primero" (a diferencia de un `findOne` suelto, que elegiría uno
+      // cualquiera y podría dar acceso/negarlo por el negocio equivocado).
+      const ownsOneHere = await this._organizationalRepository.exists({
+        where: { legalPersonId: target.id, municipalityId: admin.municipalityId },
+      });
+      if (!ownsOneHere) {
+        throw new ForbiddenException('No tienes acceso a esta cuenta.');
+      }
+      return;
+    }
+    if (isOutsideMunicipalityScope(target.municipalityId, admin.municipalityId)) {
+      throw new ForbiddenException('No tienes acceso a esta cuenta.');
+    }
   }
 
   async findByParams(params: Record<string, any>): Promise<User> {
     return await this._userRepository.findOne({
       where: params,
-      relations: ['roleType'],
+      relations: ['roleType', 'municipality'],
     });
   }
 
-  async create(dto: CreateUserDto): Promise<User> {
+  async create(dto: CreateUserDto, admin?: User): Promise<User> {
     const { roleTypeCode, ...data } = dto;
     await this.assertEmailAvailable(data.email);
     await this.assertUsernameAvailable(data.username);
@@ -150,8 +191,11 @@ export class UserService {
     await this.assertRelationsExist(data);
 
     // El rol puede venir por uuid (roleTypeId) o por code (roleTypeCode);
-    // el code manda si vienen los dos.
+    // el code manda si vienen los dos. `targetRoleCode` se resuelve siempre
+    // (no solo para admins regionales) porque también lo usa la validación
+    // de municipio obligatorio para ADMIN, más abajo.
     let roleTypeId = data.roleTypeId;
+    let targetRoleCode = roleTypeCode as RoleTypeCode | undefined;
     if (roleTypeCode) {
       const roleType = await this._roleTypeRepository.findOne({
         where: { code: roleTypeCode },
@@ -162,6 +206,41 @@ export class UserService {
         );
       }
       roleTypeId = roleType.id;
+    } else if (roleTypeId) {
+      const roleType = await this._roleTypeRepository.findOne({
+        where: { id: roleTypeId },
+      });
+      targetRoleCode = roleType?.code as RoleTypeCode | undefined;
+    }
+
+    // Solo SUPERADMIN puede crear cuentas ADMIN o SUPERADMIN.
+    if (admin && !isSuperAdmin(admin) && isAdminRole(targetRoleCode)) {
+      throw new ForbiddenException(
+        'Solo el superadmin puede crear cuentas de administrador.',
+      );
+    }
+
+    // Admin regional (no SUPERADMIN): la cuenta nueva nace SÍ o SÍ en SU
+    // municipio (mismo criterio que negocios) — si no manda ninguno se le
+    // asigna el suyo; si manda uno distinto, se bloquea.
+    if (admin && !isSuperAdmin(admin)) {
+      if (
+        data.municipalityId != null &&
+        data.municipalityId !== admin.municipalityId
+      ) {
+        throw new ForbiddenException(
+          'Solo puedes crear cuentas en tu propio municipio.',
+        );
+      }
+      data.municipalityId = admin.municipalityId;
+    }
+
+    // ADMIN (no SUPERADMIN) siempre necesita un municipio — ya no existe
+    // "ADMIN sin municipio" como señal implícita de superadmin.
+    if (targetRoleCode === RoleTypeCode.ADMIN && data.municipalityId == null) {
+      throw new BadRequestException(
+        'Asigna un municipio a la cuenta de administrador.',
+      );
     }
 
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
@@ -781,8 +860,44 @@ export class UserService {
     return { user: withRole, isNewUser: true };
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<User> {
-    const user = await this.findOne(id);
+  async update(id: string, dto: UpdateUserDto, admin?: User): Promise<User> {
+    const user = await this.findOne(id, admin);
+
+    // Solo el superadmin puede CAMBIAR el rol o el municipio de una cuenta —
+    // un admin regional no puede ascender/degradar a ADMIN ni reasignar
+    // municipios (así no puede "mover" datos fuera de su alcance). Compara
+    // contra el valor YA guardado (no solo "vino en el body"): el form de
+    // edición manda `municipalityId` sin tocar en cada guardado, y eso no
+    // debe bloquear una edición normal de un campo cualquiera.
+    if (admin && !isSuperAdmin(admin)) {
+      const changesRole =
+        (dto.roleTypeCode !== undefined &&
+          dto.roleTypeCode !== user.roleType?.code) ||
+        (dto.roleTypeId !== undefined && dto.roleTypeId !== user.roleTypeId);
+      const changesMunicipality =
+        dto.municipalityId !== undefined &&
+        dto.municipalityId !== user.municipalityId;
+      if (changesRole || changesMunicipality) {
+        throw new ForbiddenException(
+          'Solo el superadmin puede cambiar el rol o el municipio de una cuenta.',
+        );
+      }
+    }
+
+    // ADMIN (no SUPERADMIN) siempre necesita un municipio — aplica tanto si
+    // esta edición lo ASCIENDE a ADMIN como si ya lo era y le están
+    // limpiando el municipio.
+    const resultingRoleCode = dto.roleTypeCode ?? user.roleType?.code;
+    const resultingMunicipalityId =
+      dto.municipalityId !== undefined ? dto.municipalityId : user.municipalityId;
+    if (
+      resultingRoleCode === RoleTypeCode.ADMIN &&
+      resultingMunicipalityId == null
+    ) {
+      throw new BadRequestException(
+        'Asigna un municipio a la cuenta de administrador.',
+      );
+    }
 
     if (dto.email && dto.email !== user.email) {
       await this.assertEmailAvailable(dto.email);
@@ -853,8 +968,8 @@ export class UserService {
    * (como cliente o como repartidor) se bloquea con 409 — el camino correcto
    * es desactivar o banear la cuenta.
    */
-  async delete(id: string): Promise<void> {
-    const user = await this.findOne(id);
+  async delete(id: string, admin?: User): Promise<void> {
+    const user = await this.findOne(id, admin);
     const orders = await this._invoiceRepository.count({
       where: [{ userId: user.id }, { deliveryUserId: user.id }],
     });
@@ -1202,7 +1317,7 @@ export class UserService {
     }
 
     const user = await this.findOne(userId);
-    if (user.roleType?.code === RoleTypeCode.ADMIN) {
+    if (isAdminRole(user.roleType?.code)) {
       throw new BadRequestException(
         'Una cuenta de administrador no puede volverse repartidor.',
       );
@@ -1372,8 +1487,9 @@ export class UserService {
   async updateAvatar(
     id: string,
     file: Express.Multer.File,
+    admin?: User,
   ): Promise<{ avatarUrl: string }> {
-    const user = await this.findOne(id);
+    const user = await this.findOne(id, admin);
 
     const { imageUrl } = await this._localStorageService.saveImage(
       file,
@@ -1392,8 +1508,8 @@ export class UserService {
   }
 
   /** Quita la foto de perfil (opcional): borra el archivo del disco y limpia la columna. */
-  async removeAvatar(id: string): Promise<void> {
-    const user = await this.findOne(id);
+  async removeAvatar(id: string, admin?: User): Promise<void> {
+    const user = await this.findOne(id, admin);
     const publicId = this._localStorageService.publicIdFromUrl(user.avatarUrl);
     await this._userRepository.update(id, { avatarUrl: null });
     if (publicId) {

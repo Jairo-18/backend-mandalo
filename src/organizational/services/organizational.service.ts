@@ -232,8 +232,12 @@ export class OrganizationalService {
    * Edición del negocio PROPIO (rol NEGO, desde su panel): el negocio se
    * resuelve por el JWT y se ignoran los campos que el negocio NO puede tocar.
    * Solo el admin/vendedor asigna la identidad legal (razón social, NIT y su
-   * tipo), las etiquetas, la ubicación (departamento, municipio, dirección y
-   * coordenadas) y lo administrativo (dueño, cuenta de acceso, estado, comisión).
+   * tipo), las etiquetas, el departamento/municipio (cambiar de municipio
+   * mueve el negocio de zona de operación, con reglas de scope regional del
+   * admin en otros lados) y lo administrativo (dueño, cuenta de acceso,
+   * estado, comisión). El negocio SÍ puede ajustar su punto exacto dentro de
+   * ese municipio (dirección y coordenadas) — típicamente lo hace parado en
+   * su propio local, con mejor precisión que el admin a la distancia.
    * El negocio edita el resto: nombre comercial, descripción, teléfono, logo,
    * horario y datos de pago. Se descartan aquí aunque el cliente los mande.
    */
@@ -254,12 +258,11 @@ export class OrganizationalService {
       identificationNumber: _in,
       identificationTypeId: _it,
       tagIds: _tg,
-      // Ubicación (la asigna el administrador).
+      // Zona de operación (la asigna el administrador); el punto exacto
+      // (address/latitude/longitude) SÍ queda en `data` para que el negocio
+      // pueda editarlo.
       departmentId: _dp,
       municipalityId: _mn,
-      address: _ad,
-      latitude: _lat,
-      longitude: _lng,
       ...data
     } = dto;
     return this.update(mine.id, data);

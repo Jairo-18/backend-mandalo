@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SelectQueryBuilder } from 'typeorm';
+import { In, SelectQueryBuilder } from 'typeorm';
 import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { TagRepository } from '../../shared/repositories/tag.repository';
@@ -135,7 +135,11 @@ export class ExploreService {
 
     const query = this._organizationalRepository
       .createQueryBuilder('organizational')
-      .leftJoinAndSelect('organizational.tags', 'tag')
+      // SIN `tags` acá: es many-to-many (`leftJoinAndSelect` haría fan-out,
+      // una fila SQL por etiqueta) y con `skip/take` eso parte las filas de
+      // un mismo negocio entre dos páginas — el negocio queda duplicado o
+      // incompleto al scrollear (cards vacías, mismo id repetido en la
+      // lista). Las etiquetas se traen aparte más abajo, ya sin paginar.
       .leftJoinAndSelect('organizational.municipality', 'municipality')
       .where(ExploreService.VISIBLE_SQL)
       .skip(skip)
@@ -170,6 +174,20 @@ export class ExploreService {
     this.applyNearFilter(query, params.lat, params.lng);
 
     const [entities, itemCount] = await query.getManyAndCount();
+
+    // Etiquetas de ESTA página (ya paginada, sin fan-out): un solo query
+    // aparte, sin skip/take, así que el join many-to-many no rompe nada.
+    if (entities.length) {
+      const withTags = await this._organizationalRepository.find({
+        where: { id: In(entities.map((e) => e.id)) },
+        relations: ['tags'],
+      });
+      const tagsById = new Map(withTags.map((o) => [o.id, o.tags]));
+      for (const organizational of entities) {
+        organizational.tags = tagsById.get(organizational.id) ?? [];
+      }
+    }
+
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
 
     return new ResponsePaginationDto(

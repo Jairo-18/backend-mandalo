@@ -181,7 +181,7 @@ export class OrganizationalController {
    */
   @Get('resolve-maps-url')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.ADMIN, RoleTypeCode.BUSINESS)
   @ResolveMapsUrlDocs()
   async resolveMapsUrl(@Query() query: ResolveMapsUrlDto) {
     const finalUrl = await this._organizationalUC.resolveMapsUrl(query.url);
@@ -197,7 +197,7 @@ export class OrganizationalController {
    */
   @Get('search-address')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.ADMIN, RoleTypeCode.BUSINESS)
   @SearchAddressDocs()
   async searchAddress(@Query() query: SearchAddressDto) {
     const data = await this._organizationalUC.searchAddress(query.q);
@@ -210,7 +210,7 @@ export class OrganizationalController {
    */
   @Get('reverse-geocode')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.ADMIN, RoleTypeCode.BUSINESS)
   @ReverseGeocodeDocs()
   async reverseGeocode(@Query() query: ReverseGeocodeDto) {
     const label = await this._organizationalUC.reverseGeocode(

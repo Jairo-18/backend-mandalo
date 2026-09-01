@@ -37,7 +37,8 @@ import { Roles } from '../../shared/decorators/roles.decorator';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
-// Escrituras solo ADMIN; las lecturas quedan con JWT porque el panel del
+// Escrituras solo SUPERADMIN (pedido del usuario: un admin regional no
+// administra categorías); las lecturas quedan con JWT porque el panel del
 // NEGO también las usa (Select de categoría en su form de producto).
 @Controller('category-type')
 @ApiTags('Categorías de producto')
@@ -47,7 +48,7 @@ export class CategoryTypeController {
 
   @Post('create')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @CreateCategoryTypeDocs()
   async create(
     @Body() body: CreateCategoryTypeDto,
@@ -80,7 +81,7 @@ export class CategoryTypeController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @UpdateCategoryTypeDocs()
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -95,7 +96,7 @@ export class CategoryTypeController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @DeleteCategoryTypeDocs()
   async delete(
     @Param('id', ParseIntPipe) id: number,

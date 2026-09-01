@@ -44,9 +44,11 @@ export class AppSettingsController {
     };
   }
 
+  // Solo SUPERADMIN (pedido del usuario: un admin regional no toca la
+  // configuración global de la app).
   @Patch()
   @UseGuards(AuthGuard(), RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   async update(
     @Body() body: UpdateAppSettingsDto,
   ): Promise<UpdateRecordResponseDto> {

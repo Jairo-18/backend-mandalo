@@ -350,9 +350,11 @@ export class UserController {
       );
   }
 
+  // Solo SUPERADMIN (pedido del usuario: un admin regional no hace alta
+  // masiva).
   @Post('bulk-invite')
   @UseGuards(AuthGuard(), RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @BulkInviteUsersDocs()
   async bulkInvite(@Body() body: BulkInviteUsersDto) {
     const result = await this._userUC.bulkInvite(body);

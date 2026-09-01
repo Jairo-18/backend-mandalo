@@ -37,7 +37,8 @@ import { Roles } from '../../shared/decorators/roles.decorator';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
-// Escrituras solo ADMIN; las lecturas quedan con JWT porque el panel del
+// Escrituras solo SUPERADMIN (pedido del usuario: un admin regional no
+// administra etiquetas); las lecturas quedan con JWT porque el panel del
 // NEGO también las usa (chips de etiquetas en "Editar mi negocio").
 @Controller('tag')
 @ApiTags('Etiquetas de negocio')
@@ -47,7 +48,7 @@ export class TagController {
 
   @Post('create')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @CreateTagDocs()
   async create(@Body() body: CreateTagDto): Promise<CreatedRecordResponseDto> {
     const tag = await this._tagUC.create(body);
@@ -78,7 +79,7 @@ export class TagController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @UpdateTagDocs()
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -93,7 +94,7 @@ export class TagController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(RoleTypeCode.ADMIN)
+  @Roles(RoleTypeCode.SUPERADMIN)
   @DeleteTagDocs()
   async delete(
     @Param('id', ParseIntPipe) id: number,

@@ -1,4 +1,8 @@
-import { GoogleSignInDto, RefreshTokenBodyDto } from '../dtos/auth.dto';
+import {
+  AppleSignInDto,
+  GoogleSignInDto,
+  RefreshTokenBodyDto,
+} from '../dtos/auth.dto';
 import {
   TokenPayloadModel,
   UserAuthModel,
@@ -13,6 +17,7 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { AccessSessionsService } from './accessSessions.service';
 import { v4 as uuidv4 } from 'uuid';
 import { UNAUTHORIZED_MESSAGE } from '../../shared/constants/messages.constant';
@@ -25,6 +30,15 @@ import { RegisterUserDto } from '../../user/dtos/user.dto';
 @Injectable()
 export class AuthService {
   private readonly _googleClient = new OAuth2Client();
+
+  /**
+   * Claves públicas de Apple. `createRemoteJWKSet` las descarga una vez y las
+   * cachea, y vuelve a pedirlas sola cuando aparece un `kid` desconocido
+   * (Apple rota sus claves) — por eso se construye una sola vez acá.
+   */
+  private readonly _appleJwks = createRemoteJWKSet(
+    new URL('https://appleid.apple.com/auth/keys'),
+  );
 
   constructor(
     private readonly _userService: UserService,
@@ -165,6 +179,75 @@ export class AuthService {
     }
 
     return payload;
+  }
+
+  /**
+   * Autenticación con Apple. La app manda el `identityToken` que entrega
+   * `expo-apple-authentication`, más el nombre — Apple SOLO lo revela en el
+   * primer sign-in, así que si no viene se cae al correo como nombre.
+   */
+  async appleSignIn(body: AppleSignInDto) {
+    const payload = await this.verifyAppleIdentityToken(body.identityToken);
+
+    const roleCode =
+      body.role === 'delivery' ? RoleTypeCode.DELIVERY : RoleTypeCode.CLIENT;
+
+    const email = typeof payload.email === 'string' ? payload.email : undefined;
+    const { user, isNewUser } = await this._userService.findOrCreateAppleUser(
+      {
+        appleId: payload.sub,
+        email,
+        fullName: body.fullName?.trim() || email?.split('@')[0] || 'Usuario',
+      },
+      roleCode,
+    );
+
+    this.assertNotBanned(user);
+
+    return await this.buildSignInResponse(user, isNewUser);
+  }
+
+  /** Vincula una cuenta de Apple al usuario YA autenticado (Mi perfil). */
+  async linkApple(userId: string, body: AppleSignInDto): Promise<void> {
+    const payload = await this.verifyAppleIdentityToken(body.identityToken);
+    const email = typeof payload.email === 'string' ? payload.email : undefined;
+    await this._userService.linkAppleAccount(userId, {
+      appleId: payload.sub,
+      email,
+      fullName: body.fullName?.trim() || email?.split('@')[0] || 'Usuario',
+    });
+  }
+
+  /** Quita el vínculo con Apple (queda el acceso por correo + contraseña). */
+  async unlinkApple(userId: string): Promise<void> {
+    await this._userService.unlinkAppleAccount(userId);
+  }
+
+  /**
+   * Verifica el identityToken de Sign in with Apple: firma contra el JWKS
+   * público de Apple (`jose` cachea las claves y las rota solo), emisor
+   * `appleid.apple.com` y audiencia = bundle id de la app iOS.
+   */
+  private async verifyAppleIdentityToken(identityToken: string) {
+    const audience = this._configService.get<string>('apple.bundleId');
+    if (!audience) {
+      throw new UnauthorizedException(
+        'La autenticación con Apple no está configurada en el servidor',
+      );
+    }
+
+    try {
+      const { payload } = await jwtVerify(identityToken, this._appleJwks, {
+        issuer: 'https://appleid.apple.com',
+        audience,
+      });
+      if (!payload.sub) {
+        throw new Error('sin sub');
+      }
+      return payload;
+    } catch {
+      throw new UnauthorizedException('No se pudo autenticar con Apple');
+    }
   }
 
   /** Recuperación de contraseña (la lógica vive en UserService). */

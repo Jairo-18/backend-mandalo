@@ -1,5 +1,6 @@
 import {
   ForgotPasswordDto,
+  AppleSignInDto,
   GoogleSignInDto,
   LoginDto,
   MessageResponseDto,
@@ -83,6 +84,53 @@ export class AuthController {
         user: data.user,
         accessSessionId: data.session?.accessSessionId,
       },
+    };
+  }
+
+  /**
+   * Sign in with Apple. Apple lo EXIGE por ofrecer login con Google
+   * (App Store Review Guideline 4.8). Mismo contrato que `/google`.
+   */
+  @Post('/apple')
+  @SkipApiKey()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async appleSignIn(@Body() body: AppleSignInDto): Promise<SignInResponseDto> {
+    const data = await this._authUC.appleSignIn(body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Bienvenid@',
+      data: {
+        tokens: data.tokens,
+        user: data.user,
+        accessSessionId: data.session?.accessSessionId,
+      },
+    };
+  }
+
+  /** Vincula una cuenta de Apple al usuario autenticado (Mi perfil). */
+  @Post('/link-apple')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async linkApple(
+    @GetUser() user: User,
+    @Body() body: AppleSignInDto,
+  ): Promise<MessageResponseDto> {
+    await this._authUC.linkApple(user.id, body);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Cuenta de Apple vinculada exitosamente',
+    };
+  }
+
+  /** Desvincula la cuenta de Apple del usuario autenticado. */
+  @Post('/unlink-apple')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async unlinkApple(@GetUser() user: User): Promise<MessageResponseDto> {
+    await this._authUC.unlinkApple(user.id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Cuenta de Apple desvinculada exitosamente',
     };
   }
 

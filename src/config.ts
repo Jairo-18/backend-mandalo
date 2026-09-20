@@ -153,5 +153,11 @@ export const config = async () => {
       // Client ID "Android" (opcional, por si el idToken llega con ese audience).
       androidClientId: process.env.GOOGLE_ANDROID_CLIENT_ID || '',
     },
+    apple: {
+      // Bundle ID de la app iOS: es el `aud` del identityToken que emite
+      // Sign in with Apple en el flujo nativo. Sin client secret ni Service
+      // ID — eso solo hace falta para el flujo web/OAuth.
+      bundleId: process.env.APPLE_BUNDLE_ID || 'com.mandaloputumayo.app',
+    },
   };
 };

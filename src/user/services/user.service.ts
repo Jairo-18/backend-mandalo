@@ -74,6 +74,20 @@ export interface GoogleUserProfile {
   avatarUrl?: string;
 }
 
+export interface AppleUserProfile {
+  appleId: string;
+  /**
+   * Apple entrega el correo real o un relay `@privaterelay.appleid.com` si el
+   * usuario eligió "Ocultar mi correo". Puede faltar en casos límite: ahí se
+   * deriva uno determinista del `sub` (ver `findOrCreateAppleUser`).
+   */
+  email?: string;
+  fullName: string;
+}
+
+/** Columna que guarda el id del proveedor social en `User`. */
+type SocialIdColumn = 'googleId' | 'appleId';
+
 export interface BulkInviteResult {
   created: string[];
   skippedExisting: string[];
@@ -782,8 +796,63 @@ export class UserService {
     profile: GoogleUserProfile,
     roleCode: RoleTypeCode = RoleTypeCode.CLIENT,
   ): Promise<{ user: User; isNewUser: boolean }> {
+    return this.findOrCreateSocialUser(
+      'googleId',
+      {
+        socialId: profile.googleId,
+        email: profile.email,
+        fullName: profile.fullName,
+        avatarUrl: profile.avatarUrl,
+      },
+      roleCode,
+    );
+  }
+
+  /**
+   * Autenticación con Apple (mismo contrato que Google). Apple NO entrega
+   * avatar, y entrega el nombre real UNA SOLA VEZ (en el primer sign-in): si
+   * después llega vacío, se conserva el que ya está guardado.
+   *
+   * Si el usuario eligió "Ocultar mi correo", Apple manda un relay
+   * `@privaterelay.appleid.com`, que se guarda tal cual — los correos de
+   * Mándalo le llegan igual. Si no llegara ningún correo, se deriva uno
+   * determinista del `sub` para no romper la columna `email` (NOT NULL); al
+   * ser estable, el usuario siempre vuelve a entrar a la misma cuenta.
+   */
+  async findOrCreateAppleUser(
+    profile: AppleUserProfile,
+    roleCode: RoleTypeCode = RoleTypeCode.CLIENT,
+  ): Promise<{ user: User; isNewUser: boolean }> {
+    return this.findOrCreateSocialUser(
+      'appleId',
+      {
+        socialId: profile.appleId,
+        email:
+          profile.email || `${profile.appleId}@privaterelay.appleid.com`,
+        fullName: profile.fullName,
+      },
+      roleCode,
+    );
+  }
+
+  /**
+   * Busca por el id del proveedor; si no existe pero el correo ya está
+   * registrado, vincula la cuenta (llena la columna del proveedor, el avatar y
+   * marca el correo como verificado — el proveedor ya lo verificó). Si no hay
+   * cuenta, la crea con el rol indicado y una contraseña aleatoria.
+   */
+  private async findOrCreateSocialUser(
+    column: SocialIdColumn,
+    profile: {
+      socialId: string;
+      email: string;
+      fullName: string;
+      avatarUrl?: string;
+    },
+    roleCode: RoleTypeCode = RoleTypeCode.CLIENT,
+  ): Promise<{ user: User; isNewUser: boolean }> {
     let user = await this._userRepository.findOne({
-      where: { googleId: profile.googleId },
+      where: { [column]: profile.socialId },
       relations: ['roleType'],
     });
 
@@ -809,16 +878,17 @@ export class UserService {
         await this._userRepository.update(
           { id: user.id },
           {
-            googleId: profile.googleId,
-            // El avatar de Google solo entra si el usuario no tiene foto propia
-            // (si no, se pisa la URL local sin borrar el archivo: queda huérfano).
+            [column]: profile.socialId,
+            // El avatar del proveedor solo entra si el usuario no tiene foto
+            // propia (si no, se pisa la URL local sin borrar el archivo:
+            // queda huérfano).
             avatarUrl: user.avatarUrl || profile.avatarUrl,
             isEmailVerified: true,
             emailVerificationToken: null,
             emailVerificationTokenExpiry: null,
           },
         );
-        user.googleId = profile.googleId;
+        user[column] = profile.socialId;
         user.avatarUrl = user.avatarUrl || profile.avatarUrl;
         user.isEmailVerified = true;
         return { user, isNewUser: false };
@@ -840,14 +910,15 @@ export class UserService {
     );
 
     const newUser = this._userRepository.create({
-      googleId: profile.googleId,
+      [column]: profile.socialId,
       email,
       fullName: profile.fullName,
       avatarUrl: profile.avatarUrl,
       password: randomPassword,
       roleTypeId: roleType.id,
-      // Un repartidor creado vía Google también espera activación del admin
-      // (además le faltan las fotos del documento: las pedirá el panel DELI).
+      // Un repartidor creado vía proveedor social también espera activación
+      // del admin (además le faltan las fotos del documento: las pedirá el
+      // panel DELI).
       isActive: roleCode !== RoleTypeCode.DELIVERY,
       isEmailVerified: true,
     });
@@ -1477,6 +1548,37 @@ export class UserService {
       throw new BadRequestException('Tu cuenta no está vinculada con Google.');
     }
     await this._userRepository.update(userId, { googleId: null });
+  }
+
+  /**
+   * Vincula una cuenta de Apple al usuario YA autenticado. Igual que con
+   * Google: el correo no tiene que coincidir, lo único prohibido es que ese
+   * `appleId` ya pertenezca a OTRO usuario. Apple no trae avatar.
+   */
+  async linkAppleAccount(
+    userId: string,
+    profile: AppleUserProfile,
+  ): Promise<void> {
+    const existing = await this._userRepository.findOne({
+      where: { appleId: profile.appleId },
+    });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException(
+        'Esa cuenta de Apple ya está vinculada a otro usuario',
+      );
+    }
+    if (existing) return; // ya estaba vinculada a esta misma cuenta
+
+    await this._userRepository.update(userId, { appleId: profile.appleId });
+  }
+
+  /** Quita el vínculo con Apple (igual que `unlinkGoogleAccount`). */
+  async unlinkAppleAccount(userId: string): Promise<void> {
+    const user = await this.findOne(userId);
+    if (!user.appleId) {
+      throw new BadRequestException('Tu cuenta no está vinculada con Apple.');
+    }
+    await this._userRepository.update(userId, { appleId: null });
   }
 
   /**

@@ -87,6 +87,10 @@ export class User {
   @Column('varchar', { length: 255, nullable: true })
   googleId?: string;
 
+  /** `sub` del identityToken de Sign in with Apple (obligatorio para la App Store). */
+  @Column('varchar', { length: 255, nullable: true })
+  appleId?: string;
+
   @Column('varchar', { length: 30, nullable: true })
   phone?: string;
 

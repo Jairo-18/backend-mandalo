@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuthService } from '../services/auth.service';
 import {
   ForgotPasswordDto,
+  AppleSignInDto,
   GoogleSignInDto,
   LoginDto,
   RefreshTokenBodyDto,
@@ -24,6 +25,18 @@ export class AuthUC {
 
   async googleSignIn(body: GoogleSignInDto) {
     return await this._authService.googleSignIn(body);
+  }
+
+  async appleSignIn(body: AppleSignInDto) {
+    return await this._authService.appleSignIn(body);
+  }
+
+  async linkApple(userId: string, body: AppleSignInDto) {
+    return await this._authService.linkApple(userId, body);
+  }
+
+  async unlinkApple(userId: string) {
+    return await this._authService.unlinkApple(userId);
   }
 
   async linkGoogle(userId: string, body: GoogleSignInDto) {

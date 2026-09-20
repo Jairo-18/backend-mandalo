@@ -43,6 +43,35 @@ export class GoogleSignInDto {
   role?: 'client' | 'delivery';
 }
 
+export class AppleSignInDto {
+  @ApiProperty({
+    type: String,
+    description: 'identityToken emitido por Sign in with Apple en la app',
+    required: true,
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'El identityToken de Apple es requerido' })
+  identityToken: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description:
+      'Nombre completo. Apple SOLO lo entrega en el primer sign-in, por eso la app lo manda aparte del token',
+  })
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @ApiPropertyOptional({
+    enum: ['client', 'delivery'],
+    description:
+      'Rol con el que se crea la cuenta si el usuario no existe (default: client)',
+  })
+  @IsOptional()
+  @IsIn(['client', 'delivery'])
+  role?: 'client' | 'delivery';
+}
+
 export class RefreshTokenBodyDto {
   @ApiProperty({
     type: String,

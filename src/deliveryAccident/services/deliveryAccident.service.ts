@@ -53,6 +53,7 @@ export class DeliveryAccidentService {
     }
     const invoice = await this._invoiceRepository.findOne({
       where: { id: dto.invoiceId },
+      relations: ['organizational'],
     });
     if (!invoice) throw new NotFoundException('Pedido no encontrado');
     if (invoice.deliveryUserId !== user.id) {
@@ -86,11 +87,15 @@ export class DeliveryAccidentService {
     });
     await this._accidentRepository.save(accident);
 
-    void this._pushService.sendToAdmins({
-      title: '🚨 Un repartidor reportó un accidente',
-      body: `${user.fullName} reportó "${dto.reasonCode}" en el pedido #${invoice.id}.`,
-      data: { type: 'accident', accidentId: accident.id },
-    });
+    // Superadmins + admins del municipio del negocio del pedido.
+    void this._pushService.sendToAdmins(
+      {
+        title: '🚨 Un repartidor reportó un accidente',
+        body: `${user.fullName} reportó "${dto.reasonCode}" en el pedido #${invoice.id}.`,
+        data: { type: 'accident', accidentId: accident.id },
+      },
+      invoice.organizational?.municipalityId,
+    );
 
     const settings = await this._appSettingsRepository.findOne({
       where: { id: 1 },

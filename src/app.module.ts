@@ -32,6 +32,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { BackupModule } from './backup/backup.module';
 import { CronJobModule } from './cronJobs/cron.job.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MunicipalityPricingModule } from './municipalityPricing/municipalityPricing.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     BackupModule,
     CronJobModule,
     DashboardModule,
+    MunicipalityPricingModule,
   ],
   controllers: [AppController],
   providers: [

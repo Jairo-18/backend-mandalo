@@ -89,7 +89,8 @@ export class Invoice {
   })
   subtotal: number;
 
-  // Tarifa fija del domicilio vigente al crear (APP_DELIVERY_FEE)
+  // Tarifa del domicilio (por distancia, tarifa del municipio del negocio)
+  // vigente al crear el pedido.
   @Column('numeric', {
     precision: 12,
     scale: 2,
@@ -161,7 +162,7 @@ export class Invoice {
   deliveryRiderCut: number;
 
   // Tarifa de servicio: % del subtotal (SIN domicilio) topada en un máximo
-  // fijo (APP_SERVICE_FEE_PERCENT/APP_SERVICE_FEE_CAP) — 100% ingreso de
+  // (tarifa del municipio del negocio, `municipalityPricing`) — 100% ingreso de
   // Mándalo, no toca la comisión del negocio ni el corte del repartidor.
   @Column('numeric', {
     precision: 12,
@@ -262,6 +263,21 @@ export class Invoice {
     transformer: numericTransformer,
   })
   retryFeeCharged: number;
+
+  // Cargo del segundo intento y minutos de espera en el sitio VIGENTES al
+  // crear el pedido (tarifa del municipio del negocio) — congelados acá
+  // porque se le informan al cliente antes de confirmar: si el admin cambia
+  // la tarifa con el pedido en curso, a este pedido no le aplica.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  retryFee: number;
+
+  @Column('int', { default: 5 })
+  deliveryWaitMinutes: number;
 
   @Column('timestamptz', { nullable: true })
   retryAcceptedAt?: Date | null;

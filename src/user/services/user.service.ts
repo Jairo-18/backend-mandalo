@@ -28,8 +28,10 @@ import {
 } from '../dtos/user.dto';
 import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
 import {
+  NO_MUNICIPALITY_SCOPE,
   isOutsideMunicipalityScope,
   isSuperAdmin,
+  scopeMunicipalityIdFor,
 } from '../../shared/utils/municipality-scope.util';
 import { MailsService } from '../../shared/services/mails.service';
 import {
@@ -171,20 +173,27 @@ export class UserService {
     if (isAdminRole(target.roleType?.code)) {
       throw new ForbiddenException('No tienes acceso a esta cuenta.');
     }
+    // Admin sin municipio asignado: no ve ninguna cuenta (antes veía todas:
+    // `municipalityId: null` en el `exists` de abajo lo ignora TypeORM y
+    // `isOutsideMunicipalityScope(x, null)` da "dentro").
+    const scopeMunicipalityId = scopeMunicipalityIdFor(admin);
+    if (scopeMunicipalityId === NO_MUNICIPALITY_SCOPE) {
+      throw new ForbiddenException('No tienes acceso a esta cuenta.');
+    }
     if (target.roleType?.code === RoleTypeCode.BUSINESS) {
       // Un dueño puede tener MÁS de un negocio (en municipios distintos):
       // basta con que UNO esté en el municipio del admin, no solo "el
       // primero" (a diferencia de un `findOne` suelto, que elegiría uno
       // cualquiera y podría dar acceso/negarlo por el negocio equivocado).
       const ownsOneHere = await this._organizationalRepository.exists({
-        where: { legalPersonId: target.id, municipalityId: admin.municipalityId },
+        where: { legalPersonId: target.id, municipalityId: scopeMunicipalityId },
       });
       if (!ownsOneHere) {
         throw new ForbiddenException('No tienes acceso a esta cuenta.');
       }
       return;
     }
-    if (isOutsideMunicipalityScope(target.municipalityId, admin.municipalityId)) {
+    if (isOutsideMunicipalityScope(target.municipalityId, scopeMunicipalityId)) {
       throw new ForbiddenException('No tienes acceso a esta cuenta.');
     }
   }
@@ -238,6 +247,11 @@ export class UserService {
     // municipio (mismo criterio que negocios) — si no manda ninguno se le
     // asigna el suyo; si manda uno distinto, se bloquea.
     if (admin && !isSuperAdmin(admin)) {
+      if (!admin.municipalityId) {
+        throw new ForbiddenException(
+          'Tu usuario administrador no tiene un municipio asignado. Pídele al superadministrador que te lo asigne.',
+        );
+      }
       if (
         data.municipalityId != null &&
         data.municipalityId !== admin.municipalityId

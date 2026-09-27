@@ -109,10 +109,18 @@ export class PushService {
     }
   }
 
-  /** Push a todos los ADMIN/SUPERADMIN (ej. un repartidor reporta un accidente). */
-  async sendToAdmins(notification: PushNotification): Promise<void> {
+  /**
+   * Push a los administradores (ej. un repartidor reporta un accidente).
+   * Con `municipalityId`: todos los SUPERADMIN + solo los ADMIN de ESE
+   * municipio (un admin regional no recibe avisos de otros municipios, que
+   * igual no podría abrir). Sin él (negocio sin municipio): todos.
+   */
+  async sendToAdmins(
+    notification: PushNotification,
+    municipalityId?: number | null,
+  ): Promise<void> {
     try {
-      const tokens = await this._pushTokenRepository
+      const query = this._pushTokenRepository
         .createQueryBuilder('pushToken')
         .innerJoin('user', 'u', 'u."id" = "pushToken"."userId"')
         .innerJoin(
@@ -121,8 +129,14 @@ export class PushService {
           'rt."id" = u."roleTypeId" AND rt."code" IN (:...codes)',
           { codes: [RoleTypeCode.ADMIN, RoleTypeCode.SUPERADMIN] },
         )
-        .where('u."isActive" = true AND u."isBanned" = false')
-        .getMany();
+        .where('u."isActive" = true AND u."isBanned" = false');
+      if (municipalityId != null) {
+        query.andWhere(
+          '(rt."code" = :superCode OR u."municipalityId" = :municipalityId)',
+          { superCode: RoleTypeCode.SUPERADMIN, municipalityId },
+        );
+      }
+      const tokens = await query.getMany();
       await this.deliver(
         tokens.map((t) => t.token),
         notification,

@@ -13,7 +13,10 @@ import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 @ApiTags('Backup')
 @SkipApiKey()
 @UseGuards(AuthGuard(), RolesGuard)
-@Roles(RoleTypeCode.ADMIN)
+// Solo SUPERADMIN: el backup vuelca TODAS las tablas (incluidos hashes de
+// contraseña y tokens) y TODOS los archivos subidos (cédulas, licencias,
+// SOAT) de todos los municipios — un admin regional no puede sacarlo.
+@Roles(RoleTypeCode.SUPERADMIN)
 export class BackupController {
   constructor(private readonly _backupUC: BackupUC) {}
 

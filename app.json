@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "1b3df5b2-9acc-485e-8c29-782db40d3f4b"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.jairo18.backendmandalo"
+    }
+  }
+}

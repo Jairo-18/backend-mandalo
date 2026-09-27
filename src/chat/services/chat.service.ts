@@ -15,6 +15,10 @@ import {
   ResponsePaginationDto,
 } from '../../shared/dtos/pagination.dto';
 import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
+import {
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { PushService } from '../../shared/services/push.service';
 import { InvoiceGateway } from '../../invoice/invoice.gateway';
@@ -306,16 +310,31 @@ export class ChatService {
   private async getInvoiceForChat(id: number): Promise<Invoice> {
     const invoice = await this._invoiceRepository.findOne({
       where: { id },
-      relations: ['stateType', 'user', 'deliveryUser'],
+      relations: ['stateType', 'user', 'deliveryUser', 'organizational'],
     });
     if (!invoice) throw new NotFoundException('Pedido no encontrado');
     return invoice;
   }
 
-  /** Cliente dueño, repartidor asignado o admin (lectura de soporte). */
+  /**
+   * Cliente dueño, repartidor asignado o admin (lectura de soporte). Admin
+   * regional: solo chats de pedidos de negocios de SU municipio (mismo
+   * alcance que el detalle del pedido — antes podía leer cualquier chat
+   * probando ids).
+   */
   private assertCanView(user: User, invoice: Invoice): void {
     const roleCode = user.roleType?.code;
-    if (isAdminRole(roleCode)) return;
+    if (isAdminRole(roleCode)) {
+      if (
+        isOutsideMunicipalityScope(
+          invoice.organizational?.municipalityId,
+          scopeMunicipalityIdFor(user),
+        )
+      ) {
+        throw new ForbiddenException('No tienes acceso a este chat.');
+      }
+      return;
+    }
     if (invoice.userId === user.id) return;
     if (invoice.deliveryUserId === user.id) return;
     throw new ForbiddenException('No tienes acceso a este chat.');

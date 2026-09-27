@@ -74,6 +74,11 @@ export class OrganizationalService {
     // distinto, se bloquea (si no, podría "plantar" negocios fuera de su
     // alcance desde el día 1).
     if (admin && !isSuperAdmin(admin)) {
+      if (!admin.municipalityId) {
+        throw new ForbiddenException(
+          'Tu usuario administrador no tiene un municipio asignado. Pídele al superadministrador que te lo asigne.',
+        );
+      }
       if (
         data.municipalityId != null &&
         data.municipalityId !== admin.municipalityId

@@ -6,7 +6,10 @@ import { PaginatedUsersParamsDto } from '../dtos/crudUser.dto';
 import { UserPaginatedListItem } from '../interfaces/user.interface';
 import { User } from '../../shared/entities/user.entity';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
-import { isSuperAdmin } from '../../shared/utils/municipality-scope.util';
+import {
+  isSuperAdmin,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 
 @Injectable()
 export class CrudUserService {
@@ -48,7 +51,8 @@ export class CrudUserService {
         {
           directRoles: [RoleTypeCode.CLIENT, RoleTypeCode.DELIVERY],
           businessRole: RoleTypeCode.BUSINESS,
-          scopeMunicipalityId: admin.municipalityId,
+          // Admin sin municipio → NO_MUNICIPALITY_SCOPE: no ve ninguna cuenta.
+          scopeMunicipalityId: scopeMunicipalityIdFor(admin),
         },
       );
     }

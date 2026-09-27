@@ -53,6 +53,8 @@ import { AppSettings } from './entities/appSettings.entity';
 import { AppSettingsRepository } from './repositories/appSettings.repository';
 import { DeliveryAccident } from './entities/deliveryAccident.entity';
 import { DeliveryAccidentRepository } from './repositories/deliveryAccident.repository';
+import { MunicipalityPricing } from './entities/municipalityPricing.entity';
+import { MunicipalityPricingRepository } from './repositories/municipalityPricing.repository';
 
 @Module({})
 export class SharedModule {
@@ -121,6 +123,7 @@ export class SharedModule {
           DeliverySettlement,
           AppSettings,
           DeliveryAccident,
+          MunicipalityPricing,
         ]),
 
         PassportModule,
@@ -189,6 +192,7 @@ export class SharedModule {
         DeliverySettlementRepository,
         AppSettingsRepository,
         DeliveryAccidentRepository,
+        MunicipalityPricingRepository,
       ],
       exports: [
         JwtModule,
@@ -221,6 +225,7 @@ export class SharedModule {
         DeliverySettlementRepository,
         AppSettingsRepository,
         DeliveryAccidentRepository,
+        MunicipalityPricingRepository,
       ],
     };
   }

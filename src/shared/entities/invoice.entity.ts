@@ -183,6 +183,12 @@ export class Invoice {
   @Column('text', { nullable: true })
   notes?: string;
 
+  // UUID que manda el front en /invoice/create (uno por intento de checkout,
+  // se mantiene igual entre reintentos del MISMO carrito) — evita pedidos
+  // duplicados si la respuesta se pierde tras un fallo ambiguo de red.
+  @Column('varchar', { length: 64, nullable: true })
+  idempotencyKey?: string | null;
+
   @Column('varchar', { length: 255, nullable: true })
   cancellationReason?: string;
 

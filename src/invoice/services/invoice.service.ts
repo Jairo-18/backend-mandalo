@@ -272,6 +272,21 @@ export class InvoiceService {
   // ---------- creación (cliente) ----------
 
   async create(user: User, dto: CreateInvoiceDto): Promise<Invoice> {
+    // Idempotencia: si el front reintenta el MISMO intento de checkout (p.
+    // ej. la respuesta se perdió por un corte justo después de crear el
+    // pedido — típico en conexión rural intermitente) manda la misma clave.
+    // Devolver el pedido ya creado en vez de uno nuevo evita duplicados
+    // (doble cobro, el negocio recibiendo el mismo pedido dos veces).
+    if (dto.idempotencyKey) {
+      const existing = await this._invoiceRepository.findOne({
+        where: { userId: user.id, idempotencyKey: dto.idempotencyKey },
+      });
+      if (existing) {
+        const full = await this.findByIdWithRelations(existing.id);
+        return this.hideCodesFor(user, full);
+      }
+    }
+
     // Negocio válido y activo.
     const organizational = await this._organizationalRepository.findOne({
       where: { id: dto.organizationalId },
@@ -375,7 +390,11 @@ export class InvoiceService {
       subtotal + deliveryFee + deliverySurcharge + serviceFee,
     );
 
-    // Transacción: cabecera + renglones juntos.
+    // Transacción: cabecera + renglones juntos. `wonRace` distingue "sí creé
+    // yo el pedido" (dispara el aviso al negocio) de "perdí la carrera de
+    // idempotencia y me devuelven el de otra petición" (nada que avisar de
+    // nuevo — el negocio ya se enteró con la petición que sí ganó).
+    let wonRace = true;
     const saved = await this._dataSource.transaction(async (manager) => {
       const invoice = manager.create(Invoice, {
         userId: user.id,
@@ -399,6 +418,7 @@ export class InvoiceService {
         retryFee: pricing.retryFee,
         deliveryWaitMinutes: pricing.waitMinutes,
         notes: dto.notes ?? null,
+        idempotencyKey: dto.idempotencyKey ?? null,
         // Códigos del flujo físico: recogida (repartidor → negocio) y
         // entrega (cliente → repartidor).
         pickupCode: this.randomCode(),
@@ -408,21 +428,42 @@ export class InvoiceService {
       for (const detail of details) detail.invoiceId = savedInvoice.id;
       await manager.save(details);
       return savedInvoice;
+    }).catch(async (e) => {
+      // Carrera real: dos peticiones con la MISMA clave llegaron casi juntas
+      // y las dos pasaron el chequeo de arriba antes de que cualquiera
+      // confirmara — el índice único (userId, idempotencyKey) de Postgres
+      // rechaza la segunda (código 23505). En vez de propagar el error, se
+      // devuelve el pedido que sí quedó creado (la que ganó la carrera).
+      if (
+        dto.idempotencyKey &&
+        (e as { code?: string })?.code === '23505'
+      ) {
+        const existing = await this._invoiceRepository.findOne({
+          where: { userId: user.id, idempotencyKey: dto.idempotencyKey },
+        });
+        if (existing) {
+          wonRace = false;
+          return existing;
+        }
+      }
+      throw e;
     });
 
     const full = await this.findByIdWithRelations(saved.id);
-    // El negocio ve el pedido entrante en vivo (sin códigos: no los necesita).
-    this._gateway.emitToOrg(organizational.id, 'invoice:created', {
-      ...full,
-      pickupCode: null,
-      deliveryCode: null,
-    });
-    // Push al dueño (el socket solo sirve con la app abierta).
-    void this._pushService.sendToUsers([organizational.legalPersonId], {
-      title: '¡Nuevo pedido! 🛍️',
-      body: `Pedido #${full.id} por ${this.formatCop(full.total)}. Ábrelo para aceptarlo.`,
-      data: { type: 'order', invoiceId: full.id },
-    });
+    if (wonRace) {
+      // El negocio ve el pedido entrante en vivo (sin códigos: no los necesita).
+      this._gateway.emitToOrg(organizational.id, 'invoice:created', {
+        ...full,
+        pickupCode: null,
+        deliveryCode: null,
+      });
+      // Push al dueño (el socket solo sirve con la app abierta).
+      void this._pushService.sendToUsers([organizational.legalPersonId], {
+        title: '¡Nuevo pedido! 🛍️',
+        body: `Pedido #${full.id} por ${this.formatCop(full.total)}. Ábrelo para aceptarlo.`,
+        data: { type: 'order', invoiceId: full.id },
+      });
+    }
     return this.hideCodesFor(user, full);
   }
 

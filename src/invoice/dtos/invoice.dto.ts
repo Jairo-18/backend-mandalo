@@ -103,6 +103,19 @@ export class CreateInvoiceDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'UUID generado por el front, uno por intento de checkout (se ' +
+      'mantiene igual si el cliente reintenta tras un fallo ambiguo de red). ' +
+      'Si ya existe un pedido con esta clave para el mismo usuario, se ' +
+      'devuelve ESE pedido en vez de crear uno nuevo.',
+    example: 'f0b3c9d2-6e2a-4b7a-9f9e-9d6b8a2a3c11',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotencyKey?: string;
 }
 
 /** Cambio de estado del pedido (aceptar, preparar, en ruta, entregar, cancelar). */

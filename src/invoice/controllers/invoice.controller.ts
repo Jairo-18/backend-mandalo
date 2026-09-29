@@ -116,14 +116,12 @@ export class InvoiceController {
 
   @Post(':id/take')
   @TakeInvoiceDocs()
-  async take(
-    @GetUser() user: User,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<UpdateRecordResponseDto> {
-    await this._invoiceUC.take(user, id);
+  async take(@GetUser() user: User, @Param('id', ParseIntPipe) id: number) {
+    const invoice = await this._invoiceUC.take(user, id);
     return {
       statusCode: HttpStatus.OK,
       message: 'Tomaste el pedido. ¡En marcha!',
+      data: invoice,
     };
   }
 
@@ -132,14 +130,12 @@ export class InvoiceController {
    * antes de poder marcar entregado). Avisa al cliente por socket + push.
    */
   @Post(':id/arrive')
-  async arrive(
-    @GetUser() user: User,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<UpdateRecordResponseDto> {
-    await this._invoiceUC.arrive(user, id);
+  async arrive(@GetUser() user: User, @Param('id', ParseIntPipe) id: number) {
+    const invoice = await this._invoiceUC.arrive(user, id);
     return {
       statusCode: HttpStatus.OK,
       message: 'Marcaste que llegaste. Se avisó al cliente.',
+      data: invoice,
     };
   }
 
@@ -152,11 +148,12 @@ export class InvoiceController {
   async retryAfterTimeout(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<UpdateRecordResponseDto> {
-    await this._invoiceUC.retryAfterTimeout(user, id);
+  ) {
+    const invoice = await this._invoiceUC.retryAfterTimeout(user, id);
     return {
       statusCode: HttpStatus.OK,
       message: 'Se dieron minutos extra de espera.',
+      data: invoice,
     };
   }
 
@@ -229,11 +226,12 @@ export class InvoiceController {
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: RejectPaymentDto,
-  ): Promise<UpdateRecordResponseDto> {
-    await this._invoiceUC.rejectPayment(user, id, body.reason);
+  ) {
+    const invoice = await this._invoiceUC.rejectPayment(user, id, body.reason);
     return {
       statusCode: HttpStatus.OK,
       message: 'Comprobante rechazado. El cliente deberá subir uno nuevo.',
+      data: invoice,
     };
   }
 
@@ -243,11 +241,12 @@ export class InvoiceController {
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateInvoiceStateDto,
-  ): Promise<UpdateRecordResponseDto> {
-    await this._invoiceUC.changeState(user, id, body);
+  ) {
+    const invoice = await this._invoiceUC.changeState(user, id, body);
     return {
       statusCode: HttpStatus.OK,
       message: 'Estado del pedido actualizado',
+      data: invoice,
     };
   }
 }

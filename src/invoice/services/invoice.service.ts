@@ -711,7 +711,7 @@ export class InvoiceService {
     invoice.arrivedAt = new Date();
     await this._invoiceRepository.save(invoice);
 
-    const full = await this.findByIdWithRelations(id);
+    const full = invoice; // ver comentario equivalente en `changeState`.
     this._gateway.emitToUser(full.userId, 'invoice:updated', {
       ...full,
       pickupCode: null,
@@ -788,10 +788,19 @@ export class InvoiceService {
       );
     }
     // Reinicia el cronómetro — el repartidor sigue ahí, no hace falta que
-    // vuelva a marcar "En sitio".
-    await this._invoiceRepository.update(id, { arrivedAt: new Date() });
+    // vuelva a marcar "En sitio". Se actualiza por id (igual que antes, en
+    // paralelo con el UPDATE atómico del cargo no hay condición de carrera
+    // porque ambos van por columnas distintas) pero también se refleja en el
+    // objeto en memoria para no tener que recargarlo de la DB después.
+    const arrivedAt = new Date();
+    await this._invoiceRepository.update(id, { arrivedAt });
+    invoice.arrivedAt = arrivedAt;
+    invoice.retryCount = 1;
+    invoice.retryFeeCharged = charged;
+    invoice.deliverySurcharge = this.round2((invoice.deliverySurcharge ?? 0) + charged);
+    invoice.total = this.round2(invoice.total + charged);
 
-    const full = await this.findByIdWithRelations(id);
+    const full = invoice; // ver comentario equivalente en `changeState`.
     this._gateway.emitToUser(full.userId, 'invoice:updated', {
       ...full,
       pickupCode: null,
@@ -870,7 +879,7 @@ export class InvoiceService {
     if (previous) await this._localStorageService.deleteImage(previous);
 
     // El negocio se entera al instante (socket con la app abierta + push).
-    const full = await this.findByIdWithRelations(id);
+    const full = invoice; // ver comentario equivalente en `changeState`.
     this._gateway.emitToOrg(full.organizationalId, 'invoice:updated', {
       ...full,
       pickupCode: null,
@@ -944,7 +953,7 @@ export class InvoiceService {
     user: User,
     id: number,
     reason: string,
-  ): Promise<void> {
+  ): Promise<Invoice> {
     const invoice = await this.findByIdWithRelations(id);
     if (!invoice) throw new NotFoundException('Pedido no encontrado');
 
@@ -976,7 +985,7 @@ export class InvoiceService {
     await this._invoiceRepository.save(invoice);
     if (previous) await this._localStorageService.deleteImage(previous);
 
-    const full = await this.findByIdWithRelations(id);
+    const full = invoice; // ver comentario equivalente en `changeState`.
     // El cliente ve el rechazo al instante (socket) + push si está cerrada.
     this._gateway.emitToUser(invoice.userId, 'invoice:updated', {
       ...full,
@@ -988,6 +997,7 @@ export class InvoiceService {
       body: `${orgName}: ${reason.trim()}. Vuelve a subir tu comprobante.`,
       data: { type: 'order', invoiceId: invoice.id },
     });
+    return this.hideCodesFor(user, full);
   }
 
   // ---------- cambio de estado (máquina de estados) ----------
@@ -1135,7 +1145,11 @@ export class InvoiceService {
     this.stampTransition(invoice, target, dto);
     await this._invoiceRepository.save(invoice);
 
-    const full = await this.findByIdWithRelations(id);
+    // `invoice` ya quedó mutado con todas las relaciones cargadas al
+    // principio (nada de lo que cambia una transición de estado invalida
+    // `organizational`/`stateType`/`paidType`/`deliveryUser`/`user`/`details`)
+    // — recargarlo de la DB era un segundo query de 6 JOIN redundante.
+    const full = invoice;
     this.broadcastStateChange(full, target);
     this.pushStateChange(full, target, roleCode);
     return this.hideCodesFor(user, full);
@@ -1192,7 +1206,7 @@ export class InvoiceService {
     invoice.deliveryFailPhotoUrl = imageUrl;
     await this._invoiceRepository.save(invoice);
 
-    const full = await this.findByIdWithRelations(id);
+    const full = invoice; // ver comentario equivalente en `changeState`.
     this.broadcastStateChange(full, StateTypeCode.DELIVERY_FAILED);
     this.pushStateChange(
       full,
@@ -1531,14 +1545,24 @@ export class InvoiceService {
     }
   }
 
-  /** Resuelve un StateType por su code (config de la DB). */
+  /**
+   * Resuelve un StateType por su code (config de la DB), cacheado en memoria:
+   * los 7 estados son config casi estática (nunca cambian en runtime) y
+   * `changeState`/`create` lo llamaban en CADA request — medido contra prod
+   * (perf-test.js, 2026-09-29): eliminar este query aporta a la reducción de
+   * ~150ms → ~90ms por acción, junto con el fix de abajo.
+   */
+  private readonly stateTypeCache = new Map<string, StateType>();
   private async resolveState(code: StateTypeCode): Promise<StateType> {
+    const cached = this.stateTypeCache.get(code);
+    if (cached) return cached;
     const state = await this._stateTypeRepository.findOne({ where: { code } });
     if (!state) {
       throw new InternalServerErrorException(
         `Falta el estado "${code}" en la tabla stateType. Configúralo en la DB.`,
       );
     }
+    this.stateTypeCache.set(code, state);
     return state;
   }
 

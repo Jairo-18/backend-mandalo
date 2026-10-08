@@ -1051,10 +1051,20 @@ export class UserService {
    * Eliminar es DESTRUCTIVO: `invoice.userId` es CASCADE, así que borrar una
    * cuenta con pedidos borraría su historial (facturas). Si tiene pedidos
    * (como cliente o como repartidor) se bloquea con 409 — el camino correcto
-   * es desactivar o banear la cuenta.
+   * es desactivar o banear la cuenta. Tampoco se borra al dueño de un negocio:
+   * `organizational.legalPersonId` es SET NULL, así que el negocio quedaría
+   * vivo y sin dueño (nadie podría entrar a gestionarlo).
    */
   async delete(id: string, admin?: User): Promise<void> {
     const user = await this.findOne(id, admin);
+    const businesses = await this._organizationalRepository.count({
+      where: { legalPersonId: user.id },
+    });
+    if (businesses > 0) {
+      throw new ConflictException(
+        'Esta cuenta es dueña de un negocio y no se puede eliminar. Elimina o reasigna el negocio primero, o desactiva la cuenta.',
+      );
+    }
     const orders = await this._invoiceRepository.count({
       where: [{ userId: user.id }, { deliveryUserId: user.id }],
     });

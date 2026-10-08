@@ -11,7 +11,8 @@ export type UploadFolder =
   | 'organizational'
   | 'products'
   | 'payments'
-  | 'delivery-failures';
+  | 'delivery-failures'
+  | 'addresses';
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const DOCUMENT_MIME_TYPES = [...IMAGE_MIME_TYPES, 'application/pdf'];

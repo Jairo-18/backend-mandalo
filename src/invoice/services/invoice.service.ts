@@ -405,6 +405,7 @@ export class InvoiceService {
         deliveryDetails: address.details ?? null,
         deliveryLatitude: address.latitude ?? null,
         deliveryLongitude: address.longitude ?? null,
+        deliveryPhotoUrl: address.photoUrl ?? null,
         subtotal,
         deliveryFee,
         deliveryMandaloCut,
@@ -456,6 +457,7 @@ export class InvoiceService {
         ...full,
         pickupCode: null,
         deliveryCode: null,
+        deliveryPhotoUrl: null,
       });
       // Push al dueño (el socket solo sirve con la app abierta).
       void this._pushService.sendToUsers([organizational.legalPersonId], {
@@ -677,6 +679,7 @@ export class InvoiceService {
       ...full,
       pickupCode: null,
       deliveryCode: null,
+      deliveryPhotoUrl: null,
     });
     this._gateway.emitToDeliveries('invoice:taken', { id });
     void this._pushService.sendToUsers([full.userId], {
@@ -761,6 +764,7 @@ export class InvoiceService {
       ...full,
       pickupCode: null,
       deliveryCode: null,
+      deliveryPhotoUrl: null,
     });
     void this._pushService.sendToUsers([full.userId], {
       title: `Pedido #${full.id} — tu repartidor llegó 🛵`,
@@ -856,6 +860,7 @@ export class InvoiceService {
       ...full,
       pickupCode: null,
       deliveryCode: null,
+      deliveryPhotoUrl: null,
     });
     const recipients = [full.userId, full.deliveryUserId].filter(
       (v): v is string => !!v,
@@ -925,6 +930,7 @@ export class InvoiceService {
       ...full,
       pickupCode: null,
       deliveryCode: null,
+      deliveryPhotoUrl: null,
     });
     void this._pushService.sendToUsers([full.organizational?.legalPersonId], {
       title: `Pedido #${full.id} — soporte de pago 💳`,
@@ -1284,6 +1290,14 @@ export class InvoiceService {
     if (role !== RoleTypeCode.DELIVERY || invoice.deliveryUserId !== user.id) {
       copy.pickupCode = null;
     }
+    // La foto de la casa solo la ve su dueño y el repartidor que ya tomó el
+    // pedido — no los demás repartidores que miran "Disponibles" ni el negocio.
+    const isOwner = role === RoleTypeCode.CLIENT && invoice.userId === user.id;
+    const isAssignedRider =
+      role === RoleTypeCode.DELIVERY && invoice.deliveryUserId === user.id;
+    if (!isOwner && !isAssignedRider) {
+      copy.deliveryPhotoUrl = null;
+    }
     return copy;
   }
 
@@ -1361,6 +1375,7 @@ export class InvoiceService {
       ...invoice,
       pickupCode: null,
       deliveryCode: null,
+      deliveryPhotoUrl: null,
     });
     if (invoice.deliveryUserId) {
       this._gateway.emitToDelivery(invoice.deliveryUserId, 'invoice:updated', {
@@ -1374,6 +1389,7 @@ export class InvoiceService {
         ...invoice,
         pickupCode: null,
         deliveryCode: null,
+        deliveryPhotoUrl: null,
       });
     }
   }

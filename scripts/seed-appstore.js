@@ -249,6 +249,18 @@ const DEMO_ACCOUNTS = {
     role: 'DELI',
     phone: '+57 320 000 0002',
   },
+  // Cuenta desechable: si el revisor quiere probar "eliminar cuenta"
+  // (obligatorio por guideline 5.1.1(v)), que la borre a ESTA y no a la de
+  // login (demo.cliente), que Apple ya borró una vez sin querer y tumbó la
+  // revisión (rechazo 2.1(a) del 2026-09-27). Sin pedidos ni negocio propio
+  // a propósito, para que borrarla sea siempre un DELETE físico instantáneo.
+  deleteTest: {
+    email: 'demo.eliminar@somosmandalo.com',
+    fullName: 'Cuenta Demo Para Eliminar',
+    username: 'demo_eliminar',
+    role: 'USER',
+    phone: '+57 320 000 0003',
+  },
 };
 
 const pic = (kw, lock) =>
@@ -514,6 +526,12 @@ async function main() {
     },
   });
   log(`${deli.created ? '✓' : '·'} domiciliario demo ${DEMO_ACCOUNTS.delivery.email}`);
+
+  const delTest = await ensureUser({
+    ...DEMO_ACCOUNTS.deleteTest,
+    muni: 'Mocoa',
+  });
+  log(`${delTest.created ? '✓' : '·'} cuenta desechable (para "eliminar cuenta") ${DEMO_ACCOUNTS.deleteTest.email}`);
 
   // ---- negocio de prueba del usuario: fuera del feed ----
   if (!DRY) {

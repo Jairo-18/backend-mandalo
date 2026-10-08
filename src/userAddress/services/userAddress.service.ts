@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
+import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
+import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { UserAddress } from '../../shared/entities/userAddress.entity';
 import { User } from '../../shared/entities/user.entity';
 import {
@@ -24,6 +26,8 @@ const MAX_ADDRESSES = 10;
 export class UserAddressService {
   constructor(
     private readonly _userAddressRepository: UserAddressRepository,
+    private readonly _invoiceRepository: InvoiceRepository,
+    private readonly _localStorageService: LocalStorageService,
   ) {}
 
   /** Mis direcciones, la principal primero. */
@@ -79,9 +83,34 @@ export class UserAddressService {
     return await this._userAddressRepository.save(address);
   }
 
+  /** Sube/reemplaza la foto de la dirección (fachada, portón…). */
+  async setPhoto(
+    user: User,
+    id: number,
+    file: Express.Multer.File,
+  ): Promise<{ photoUrl: string }> {
+    const address = await this.findMine(user, id);
+    const { imageUrl } = await this._localStorageService.saveImage(
+      file,
+      'addresses',
+    );
+    const oldUrl = address.photoUrl;
+    await this._userAddressRepository.update(id, { photoUrl: imageUrl });
+    await this.deletePhotoFileIfUnused(oldUrl);
+    return { photoUrl: imageUrl };
+  }
+
+  async removePhoto(user: User, id: number): Promise<void> {
+    const address = await this.findMine(user, id);
+    const oldUrl = address.photoUrl;
+    await this._userAddressRepository.update(id, { photoUrl: null });
+    await this.deletePhotoFileIfUnused(oldUrl);
+  }
+
   async delete(user: User, id: number): Promise<void> {
     const address = await this.findMine(user, id);
     await this._userAddressRepository.remove(address);
+    await this.deletePhotoFileIfUnused(address.photoUrl);
 
     // Si se borró la principal, la más antigua que quede toma su lugar.
     if (address.isDefault) {
@@ -107,6 +136,22 @@ export class UserAddressService {
       throw new NotFoundException('Dirección no encontrada');
     }
     return address;
+  }
+
+  /**
+   * Borra el archivo de la foto SOLO si ningún pedido lo referencia: el
+   * pedido guarda un snapshot de la URL (`invoice.deliveryPhotoUrl`) y el
+   * repartidor de un pedido en curso todavía la necesita.
+   */
+  private async deletePhotoFileIfUnused(url?: string | null): Promise<void> {
+    const publicId = this._localStorageService.publicIdFromUrl(url);
+    if (!url || !publicId) return;
+    const inUse = await this._invoiceRepository.count({
+      where: { deliveryPhotoUrl: url },
+    });
+    if (inUse === 0) {
+      await this._localStorageService.deleteImage(publicId);
+    }
   }
 
   private async clearDefault(userId: string): Promise<void> {

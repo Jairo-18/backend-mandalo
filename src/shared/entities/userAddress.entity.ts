@@ -44,6 +44,11 @@ export class UserAddress {
   @Column('double precision', { nullable: true })
   longitude?: number;
 
+  // Foto de la fachada/portón para que el repartidor reconozca el lugar. Es
+  // solo la URL: el archivo vive en disco (`uploads/addresses`), nunca en la DB.
+  @Column('varchar', { length: 500, nullable: true })
+  photoUrl?: string | null;
+
   // Solo UNA por usuario (lo garantiza el service).
   @Column('boolean', { default: false })
   isDefault: boolean;

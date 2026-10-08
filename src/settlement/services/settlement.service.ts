@@ -26,6 +26,8 @@ interface QuincenaTotals {
   ordersCount: number;
   salesTotal: number;
   serviceFeeTotal: number;
+  /** Domicilio completo cobrado al cliente (tarifa + recargos). */
+  deliveryTotal: number;
 }
 
 /** Fila que ve el admin: quincena (cobrable) o mes/año (resumen). */
@@ -46,6 +48,16 @@ export interface SettlementPeriodItem {
    * `invoice.serviceFee`, que no cambia tras la entrega.
    */
   serviceFeeTotal: number;
+  /**
+   * Domicilio completo que pagó el cliente (tarifa + recargos). El negocio
+   * recibe TODO lo que paga el cliente (efectivo o transferencia), así que
+   * también se lo pide de vuelta: Mándalo reparte esto entre el repartidor
+   * y su propia parte (ver `DeliveryPricingService.splitFee`). Se recalcula
+   * en vivo desde `invoice.deliveryFee + deliverySurcharge`.
+   */
+  deliveryTotal: number;
+  /** Lo que el negocio entrega a Mándalo: comisión + tarifa de servicio + domicilio. */
+  totalDue: number;
   /** Solo quincena: el cobro real (se marca/desmarca). Null en mes/año. */
   settlement: {
     id: number;
@@ -67,8 +79,11 @@ export interface SettlementPeriodItem {
  * la ÚNICA unidad que se marca cobrada/pendiente. Mes y año son resúmenes que
  * se arman sumando sus quincenas. La comisión es % sobre lo vendido
  * (subtotal), la tasa vigente de CADA negocio (organizational.commissionOrderRate,
- * la sube el admin a mano de 5% a 12%). El domicilio no se cobra al negocio
- * (se reparte 100% entre Mándalo y el repartidor, ver DeliveryPricingService).
+ * la sube el admin a mano de 5% a 12%). Todo el dinero del cliente (subtotal +
+ * domicilio + recargos + tarifa de servicio) termina en manos del negocio,
+ * así que el negocio entrega a Mándalo comisión + tarifa de servicio + domicilio
+ * (`totalDue`); Mándalo reparte el domicilio con el repartidor (ver
+ * DeliveryPricingService y DeliverySettlementService).
  */
 @Injectable()
 export class SettlementService {
@@ -175,7 +190,7 @@ export class SettlementService {
     settlement.periodEnd = this.periodEnd(SettlementPeriodType.QUINCENA, dto.periodStart);
     settlement.ordersCount = row.ordersCount;
     settlement.salesTotal = row.salesTotal;
-    settlement.deliveryTotal = 0;
+    settlement.deliveryTotal = row.deliveryTotal;
     settlement.orderCommissionRate = rate;
     settlement.deliveryCommissionRate = 0;
     settlement.commissionTotal = commissionTotal;
@@ -211,6 +226,7 @@ export class SettlementService {
               ordersCount: 0,
               salesTotal: 0,
               serviceFeeTotal: 0,
+              deliveryTotal: 0,
             },
             rate,
             settlement,
@@ -237,6 +253,8 @@ export class SettlementService {
       commissionRate: rate,
       commissionTotal,
       serviceFeeTotal: row.serviceFeeTotal,
+      deliveryTotal: row.deliveryTotal,
+      totalDue: this.round2(commissionTotal + row.serviceFeeTotal + row.deliveryTotal),
       settlement: settlement
         ? {
             id: settlement.id,
@@ -265,13 +283,14 @@ export class SettlementService {
     // quincenas pagadas), y ESE resultado se vuelve a juntar por año.
     if (granularity === 'year') {
       const months = this.rollUp(quincenas, 'month', rate);
-      const byYear = new Map<string, { orders: number; sales: number; serviceFee: number; paid: number; total: number }>();
+      const byYear = new Map<string, { orders: number; sales: number; serviceFee: number; delivery: number; paid: number; total: number }>();
       for (const m of months) {
         const year = m.periodStart.slice(0, 4);
-        const acc = byYear.get(year) ?? { orders: 0, sales: 0, serviceFee: 0, paid: 0, total: 0 };
+        const acc = byYear.get(year) ?? { orders: 0, sales: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
         acc.orders += m.ordersCount;
         acc.sales += m.salesTotal;
         acc.serviceFee += m.serviceFeeTotal;
+        acc.delivery += m.deliveryTotal;
         acc.total += 1;
         if (m.paidSubperiods === m.totalSubperiods && (m.totalSubperiods ?? 0) > 0) acc.paid += 1;
         byYear.set(year, acc);
@@ -290,6 +309,8 @@ export class SettlementService {
             commissionRate: rate,
             commissionTotal,
             serviceFeeTotal: this.round2(acc.serviceFee),
+            deliveryTotal: this.round2(acc.delivery),
+            totalDue: this.round2(commissionTotal + acc.serviceFee + acc.delivery),
             settlement: null,
             paidSubperiods: acc.paid,
             totalSubperiods: acc.total,
@@ -297,13 +318,14 @@ export class SettlementService {
         });
     }
 
-    const byMonth = new Map<string, { orders: number; sales: number; serviceFee: number; paid: number; total: number }>();
+    const byMonth = new Map<string, { orders: number; sales: number; serviceFee: number; delivery: number; paid: number; total: number }>();
     for (const q of quincenas) {
       const month = q.periodStart.slice(0, 7); // YYYY-MM
-      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, serviceFee: 0, paid: 0, total: 0 };
+      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
       acc.orders += q.ordersCount;
       acc.sales += q.salesTotal;
       acc.serviceFee += q.serviceFeeTotal;
+      acc.delivery += q.deliveryTotal;
       acc.total += 1;
       if (q.settlement?.isPaid) acc.paid += 1;
       byMonth.set(month, acc);
@@ -322,6 +344,8 @@ export class SettlementService {
           commissionRate: rate,
           commissionTotal,
           serviceFeeTotal: this.round2(acc.serviceFee),
+          deliveryTotal: this.round2(acc.delivery),
+          totalDue: this.round2(commissionTotal + acc.serviceFee + acc.delivery),
           settlement: null,
           paidSubperiods: acc.paid,
           totalSubperiods: acc.total,
@@ -351,6 +375,10 @@ export class SettlementService {
       .addSelect('COUNT(*)::int', 'ordersCount')
       .addSelect('COALESCE(SUM(invoice."subtotal"), 0)', 'salesTotal')
       .addSelect('COALESCE(SUM(invoice."serviceFee"), 0)', 'serviceFeeTotal')
+      .addSelect(
+        'COALESCE(SUM(invoice."deliveryFee" + COALESCE(invoice."deliverySurcharge", 0)), 0)',
+        'deliveryTotal',
+      )
       .where('invoice."organizationalId" = :oid', { oid: organizationalId })
       .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
       .andWhere('invoice."deliveredAt" IS NOT NULL')
@@ -366,6 +394,7 @@ export class SettlementService {
       ordersCount: number;
       salesTotal: string;
       serviceFeeTotal: string;
+      deliveryTotal: string;
     }>();
 
     return rows.map((row) => ({
@@ -373,6 +402,7 @@ export class SettlementService {
       ordersCount: Number(row.ordersCount),
       salesTotal: this.round2(parseFloat(row.salesTotal)),
       serviceFeeTotal: this.round2(parseFloat(row.serviceFeeTotal)),
+      deliveryTotal: this.round2(parseFloat(row.deliveryTotal)),
     }));
   }
 

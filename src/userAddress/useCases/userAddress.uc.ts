@@ -22,6 +22,14 @@ export class UserAddressUC {
     return this._userAddressService.update(user, id, dto);
   }
 
+  setPhoto(user: User, id: number, file: Express.Multer.File) {
+    return this._userAddressService.setPhoto(user, id, file);
+  }
+
+  removePhoto(user: User, id: number) {
+    return this._userAddressService.removePhoto(user, id);
+  }
+
   delete(user: User, id: number) {
     return this._userAddressService.delete(user, id);
   }

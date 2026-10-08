@@ -8,8 +8,11 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { UserAddressUC } from '../useCases/userAddress.uc';
@@ -76,6 +79,34 @@ export class UserAddressController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Dirección actualizada exitosamente',
+    };
+  }
+
+  /** Sube/reemplaza la foto de la dirección (multipart, campo `file`). */
+  @Post(':id/photo')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadPhoto(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._userAddressUC.setPhoto(user, id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de la dirección guardada',
+      data,
+    };
+  }
+
+  @Delete(':id/photo')
+  async removePhoto(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DeleteRecordResponseDto> {
+    await this._userAddressUC.removePhoto(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Foto de la dirección eliminada',
     };
   }
 

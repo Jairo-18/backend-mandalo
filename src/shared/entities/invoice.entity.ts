@@ -82,6 +82,11 @@ export class Invoice {
   @Column('double precision', { nullable: true })
   deliveryLongitude?: number;
 
+  // Snapshot de la foto de la dirección (`userAddress.photoUrl`) al pedir: la
+  // ve el repartidor asignado al entregar. Se copia la URL, no el archivo.
+  @Column('varchar', { length: 500, nullable: true })
+  deliveryPhotoUrl?: string | null;
+
   @Column('numeric', {
     precision: 12,
     scale: 2,

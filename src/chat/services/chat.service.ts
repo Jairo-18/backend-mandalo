@@ -14,7 +14,10 @@ import {
   ParamsPaginationDto,
   ResponsePaginationDto,
 } from '../../shared/dtos/pagination.dto';
-import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
+import {
+  RoleTypeCode,
+  isAdminRole,
+} from '../../shared/roles/roleTypeCode.enum';
 import {
   isOutsideMunicipalityScope,
   scopeMunicipalityIdFor,
@@ -110,9 +113,7 @@ export class ChatService {
       );
     }
     if (!this.isChatActive(invoice)) {
-      throw new BadRequestException(
-        'El chat de este pedido ya está cerrado.',
-      );
+      throw new BadRequestException('El chat de este pedido ya está cerrado.');
     }
 
     const message = await this._chatMessageRepository.save(
@@ -132,16 +133,16 @@ export class ChatService {
       payload,
     );
 
-    // Push SOLO si el destinatario no está conectado al socket (app cerrada).
+    // Push SOLO si el destinatario no tiene la app en primer plano (cerrada o
+    // minimizada). Con la app abierta la propia app suena (`in-app-alerts.ts`).
     const recipientId = isClient ? invoice.deliveryUserId : invoice.userId;
-    const connected =
-      this._gateway.hasListeners(`user:${recipientId}`) ||
-      this._gateway.hasListeners(`delivery:${recipientId}`);
-    if (!connected) {
+    const foreground =
+      (await this._gateway.hasForegroundListeners(`user:${recipientId}`)) ||
+      (await this._gateway.hasForegroundListeners(`delivery:${recipientId}`));
+    if (!foreground) {
       void this._pushService.sendToUsers([recipientId], {
         title: `💬 ${user.fullName || 'Nuevo mensaje'}`,
-        body:
-          dto.body.length > 120 ? `${dto.body.slice(0, 117)}…` : dto.body,
+        body: dto.body.length > 120 ? `${dto.body.slice(0, 117)}…` : dto.body,
         data: { type: 'chat', invoiceId },
       });
     }

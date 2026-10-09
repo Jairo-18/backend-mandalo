@@ -153,21 +153,32 @@ export class MunicipalityPricing {
 
   // ---------- tarifa de servicio (100% Mándalo) ----------
 
-  /** % del subtotal (sin domicilio) que se cobra como tarifa de servicio. */
-  @Column('numeric', {
-    precision: 5,
-    scale: 2,
-    transformer: numericTransformer,
-  })
-  serviceFeePercent: number;
+  // Por TRAMOS sobre el subtotal de los productos (sin domicilio), ver
+  // migración 1786900000000-ServiceFeeTiers.
 
-  /** Tope de la tarifa de servicio (COP). 0 = sin tope. */
+  /** Umbral del subtotal (COP) que separa la tarifa baja de la alta. */
   @Column('numeric', {
     precision: 12,
     scale: 2,
     transformer: numericTransformer,
   })
-  serviceFeeCap: number;
+  serviceFeeThreshold: number;
+
+  /** Tarifa fija (COP) si el subtotal es MENOR al umbral. */
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    transformer: numericTransformer,
+  })
+  serviceFeeBelow: number;
+
+  /** Tarifa fija (COP) si el subtotal es IGUAL O MAYOR al umbral. */
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    transformer: numericTransformer,
+  })
+  serviceFeeAbove: number;
 
   // ---------- auditoría ----------
 

@@ -36,11 +36,14 @@ export type BusinessDashboardStats = {
   products: number;
 };
 
+// "Entrega fallida" sigue sin resolver (el cliente decide reintentar o
+// cancelar): cuenta como pedido en curso.
 const ACTIVE_ORDER_CODES = [
   StateTypeCode.PENDING,
   StateTypeCode.ACCEPTED,
   StateTypeCode.PREPARING,
   StateTypeCode.ON_ROUTE,
+  StateTypeCode.DELIVERY_FAILED,
 ];
 
 /**
@@ -131,6 +134,7 @@ export class DashboardService {
           StateTypeCode.ACCEPTED,
           StateTypeCode.PREPARING,
           StateTypeCode.ON_ROUTE,
+          StateTypeCode.DELIVERY_FAILED,
         ],
         org.id,
       ),

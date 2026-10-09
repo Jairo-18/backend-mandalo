@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -103,10 +104,7 @@ export class InvoiceController {
 
   @Get(':id')
   @FindOneInvoiceDocs()
-  async findOne(
-    @GetUser() user: User,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async findOne(@GetUser() user: User, @Param('id', ParseIntPipe) id: number) {
     const invoice = await this._invoiceUC.findOne(user, id);
     return {
       statusCode: HttpStatus.OK,
@@ -247,6 +245,16 @@ export class InvoiceController {
       statusCode: HttpStatus.OK,
       message: 'Estado del pedido actualizado',
       data: invoice,
+    };
+  }
+
+  /** Borrado definitivo (solo ADMIN/SUPERADMIN; el rol se valida en el service). */
+  @Delete(':id')
+  async remove(@GetUser() user: User, @Param('id', ParseIntPipe) id: number) {
+    await this._invoiceUC.remove(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Pedido eliminado',
     };
   }
 }

@@ -8,7 +8,8 @@ import {
 } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, LessThan } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { ProductRepository } from '../../shared/repositories/product.repository';
 import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
@@ -547,15 +548,17 @@ export class InvoiceService {
           adminOid: params.organizationalId,
         });
       }
+      // Fecha que manda en los cobros: entrega o, en una entrega fallida que
+      // terminó cancelada, la cancelación (ver settlement.service).
       if (params.deliveredFrom) {
         query.andWhere(
-          `(invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}')::date >= :dfrom`,
+          `((COALESCE(invoice."deliveredAt", CASE WHEN invoice."deliveryFailedAt" IS NOT NULL THEN invoice."cancelledAt" END)) AT TIME ZONE '${APP_TIMEZONE}')::date >= :dfrom`,
           { dfrom: params.deliveredFrom },
         );
       }
       if (params.deliveredTo) {
         query.andWhere(
-          `(invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}')::date <= :dto`,
+          `((COALESCE(invoice."deliveredAt", CASE WHEN invoice."deliveryFailedAt" IS NOT NULL THEN invoice."cancelledAt" END)) AT TIME ZONE '${APP_TIMEZONE}')::date <= :dto`,
           { dto: params.deliveredTo },
         );
       }
@@ -685,6 +688,11 @@ export class InvoiceService {
     void this._pushService.sendToUsers([full.userId], {
       title: `Pedido #${full.id}`,
       body: 'Un repartidor tomó tu pedido. Pronto saldrá en camino.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+    void this._pushService.sendToUsers([full.organizational?.legalPersonId], {
+      title: `Pedido #${full.id}: repartidor asignado 🛵`,
+      body: `${user.fullName || 'Un repartidor'} tomó el pedido y va a recogerlo.`,
       data: { type: 'order', invoiceId: full.id },
     });
     return this.hideCodesFor(user, full);
@@ -906,6 +914,13 @@ export class InvoiceService {
         'El pedido está cancelado — no se puede adjuntar el soporte.',
       );
     }
+    // Pasar a PREP exige el comprobante (pagos distintos a efectivo): desde
+    // ahí el negocio ya lo aprobó y queda fijo.
+    if (!this.isProofEditable(invoice)) {
+      throw new BadRequestException(
+        'El negocio ya aprobó el pago — el comprobante ya no se puede cambiar.',
+      );
+    }
     if (!file) {
       throw new BadRequestException('Adjunta la imagen del soporte de pago.');
     }
@@ -1016,6 +1031,11 @@ export class InvoiceService {
     if (!invoice.paymentProofUrl) {
       throw new BadRequestException(
         'El cliente aún no ha subido un comprobante para rechazar.',
+      );
+    }
+    if (!this.isProofEditable(invoice)) {
+      throw new BadRequestException(
+        'Ya aprobaste este pago al pasar el pedido a preparación — no se puede rechazar el comprobante.',
       );
     }
     if (!reason?.trim()) {
@@ -1229,6 +1249,21 @@ export class InvoiceService {
         'Solo puedes reportar esto mientras el pedido está en camino.',
       );
     }
+    // Solo tras cumplir la espera en el sitio: los primeros N minutos desde
+    // "En sitio" o, si el cliente pidió más tiempo (`retryAfterTimeout`
+    // reinicia `arrivedAt`), los N extra. "Marcar entregado" no tiene esta
+    // restricción: si el cliente sale tarde, se entrega igual.
+    if (!invoice.arrivedAt) {
+      throw new BadRequestException(
+        'Primero marca "En sitio" y espera al cliente antes de reportar que no se pudo entregar.',
+      );
+    }
+    const waitMinutes = invoice.deliveryWaitMinutes ?? 5;
+    if (Date.now() - invoice.arrivedAt.getTime() < waitMinutes * 60_000) {
+      throw new BadRequestException(
+        `Espera los ${waitMinutes} minutos en el sitio antes de reportar que no se pudo entregar.`,
+      );
+    }
     if (!failureReason?.trim()) {
       throw new BadRequestException(
         'Indica por qué no se pudo entregar el pedido.',
@@ -1435,6 +1470,16 @@ export class InvoiceService {
         });
         break;
       case StateTypeCode.ON_ROUTE:
+        if (actorRole === RoleTypeCode.CLIENT) {
+          // FALL → RUTA lo decide el CLIENTE (reintentar pagando el cargo):
+          // el que tiene que enterarse es el repartidor.
+          void this._pushService.sendToUsers([invoice.deliveryUserId], {
+            title: `Pedido ${num}: el cliente pidió reintentar 🔁`,
+            body: 'Vuelve a la dirección para entregar el pedido.',
+            data,
+          });
+          break;
+        }
         void this._pushService.sendToUsers([invoice.userId], {
           title:
             invoice.retryCount > 0
@@ -1444,6 +1489,12 @@ export class InvoiceService {
             invoice.retryCount > 0
               ? 'El repartidor va de nuevo hacia tu dirección.'
               : 'El repartidor va hacia tu dirección. Ten a mano tu código de entrega.',
+          data,
+        });
+        // Lo despachó el negocio: el repartidor confirma que ya puede salir.
+        void this._pushService.sendToUsers([invoice.deliveryUserId], {
+          title: `Pedido ${num} despachado 📦`,
+          body: `${orgName} te entregó el pedido. Ve hacia la dirección del cliente.`,
           data,
         });
         break;
@@ -1457,6 +1508,16 @@ export class InvoiceService {
             : 'Abre el pedido para reintentar la entrega o cancelarlo.',
           data,
         });
+        void this._pushService.sendToUsers(
+          [invoice.organizational?.legalPersonId],
+          {
+            title: `Pedido ${num}: entrega fallida ⚠️`,
+            body: invoice.deliveryFailReason
+              ? `El repartidor no pudo entregar. Motivo: ${invoice.deliveryFailReason}.`
+              : 'El repartidor no pudo entregar. El cliente decide si reintenta o cancela.',
+            data,
+          },
+        );
         break;
       case StateTypeCode.DELIVERED:
         void this._pushService.sendToUsers([invoice.userId], {
@@ -1464,12 +1525,20 @@ export class InvoiceService {
           body: '¡Gracias por pedir en Mandalo!',
           data,
         });
+        void this._pushService.sendToUsers(
+          [invoice.organizational?.legalPersonId],
+          {
+            title: `Pedido ${num} entregado ✅`,
+            body: 'El repartidor entregó el pedido al cliente.',
+            data,
+          },
+        );
         break;
       case StateTypeCode.CANCELLED:
         if (actorRole === RoleTypeCode.CLIENT) {
-          // El cliente canceló: avisar al negocio.
+          // El cliente canceló: avisar al negocio (y al repartidor si ya había).
           void this._pushService.sendToUsers(
-            [invoice.organizational?.legalPersonId],
+            [invoice.organizational?.legalPersonId, invoice.deliveryUserId],
             {
               title: `Pedido ${num} cancelado`,
               body: 'El cliente canceló el pedido.',
@@ -1490,6 +1559,197 @@ export class InvoiceService {
           );
         }
         break;
+    }
+  }
+
+  /**
+   * El comprobante se puede subir/cambiar/rechazar solo hasta que el negocio
+   * lo aprueba, que es al pasar a PREP (preparar exige el comprobante en
+   * pagos distintos a efectivo). PEND/ACEP: abierto; de PREP en adelante: fijo.
+   */
+  private isProofEditable(invoice: Invoice): boolean {
+    const code = invoice.stateType?.code;
+    return (
+      code === (StateTypeCode.PENDING as string) ||
+      code === (StateTypeCode.ACCEPTED as string)
+    );
+  }
+
+  // ---------- entrega fallida sin decisión del cliente ----------
+
+  /** Horas que tiene el cliente para decidir (reintentar o cancelar). */
+  private static readonly FAILED_DELIVERY_DECISION_HOURS = 24;
+  private autoCancelRunning = false;
+
+  /**
+   * Un pedido en "Entrega fallida" espera que el CLIENTE decida reintentar o
+   * cancelar. Si en 24 h no decide, se cancela solo: así no queda colgado y
+   * entra a los cobros como pedido fallido (ver settlement /
+   * deliverySettlement). Claim atómico por pedido (solo si sigue en FALL).
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async autoCancelStaleFailedDeliveries(): Promise<void> {
+    if (this.autoCancelRunning) return;
+    this.autoCancelRunning = true;
+    try {
+      const failed = await this.resolveState(StateTypeCode.DELIVERY_FAILED);
+      const cancelled = await this.resolveState(StateTypeCode.CANCELLED);
+      const hours = InvoiceService.FAILED_DELIVERY_DECISION_HOURS;
+      const limit = new Date(Date.now() - hours * 3_600_000);
+      const stale = await this._invoiceRepository.find({
+        where: { stateTypeId: failed.id, deliveryFailedAt: LessThan(limit) },
+        select: ['id'],
+      });
+
+      for (const { id } of stale) {
+        const result = await this._invoiceRepository
+          .createQueryBuilder()
+          .update(Invoice)
+          .set({
+            stateTypeId: cancelled.id,
+            cancelledAt: new Date(),
+            cancellationReason: `Cancelado automáticamente: el cliente no decidió en ${hours} h tras la entrega fallida.`,
+          })
+          .where('id = :id', { id })
+          .andWhere('"stateTypeId" = :failed', { failed: failed.id })
+          .execute();
+        if (!result.affected) continue;
+
+        const full = await this.findByIdWithRelations(id);
+        if (!full) continue;
+        this.broadcastStateChange(full, StateTypeCode.CANCELLED);
+        const data = { type: 'order', invoiceId: id };
+        void this._pushService.sendToUsers([full.userId], {
+          title: `Pedido #${id} cancelado`,
+          body: `No elegiste reintentar la entrega en ${hours} h, así que el pedido se canceló.`,
+          data,
+        });
+        void this._pushService.sendToUsers(
+          [full.organizational?.legalPersonId, full.deliveryUserId],
+          {
+            title: `Pedido #${id} cancelado`,
+            body: `El cliente no decidió en ${hours} h tras la entrega fallida; se canceló automáticamente.`,
+            data,
+          },
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `[InvoiceService] Cancelación automática falló: ${(error as Error).message}`,
+      );
+    } finally {
+      this.autoCancelRunning = false;
+    }
+  }
+
+  // ---------- eliminar (solo admin) ----------
+
+  /**
+   * Borra un pedido de forma DEFINITIVA (limpiar pedidos de prueba). Solo
+   * ADMIN/SUPERADMIN; el admin regional, solo los de su municipio
+   * (`assertCanView`). Cascada en DB: detalles y chat se borran; los
+   * accidentes reportados quedan con `invoiceId = NULL`.
+   *
+   * Se bloquea si el pedido cae en una quincena YA marcada como cobrada al
+   * negocio o pagada al repartidor: esas filas guardan los totales del
+   * momento y quedarían descuadradas. Primero se desmarca el cobro.
+   */
+  async remove(user: User, id: number): Promise<void> {
+    if (!isAdminRole(user.roleType?.code)) {
+      throw new ForbiddenException(
+        'Solo un administrador puede eliminar pedidos.',
+      );
+    }
+    const invoice = await this.findByIdWithRelations(id);
+    if (!invoice) throw new NotFoundException('Pedido no encontrado');
+    await this.assertCanView(user, invoice);
+
+    // Entregado, o fallido (cancelado tras "No se pudo entregar"): ambos
+    // cuentan en los cobros, con la fecha de entrega o la de cancelación.
+    if (invoice.deliveredAt || (invoice.deliveryFailedAt && invoice.cancelledAt)) {
+      const rows: { business: boolean; rider: boolean }[] =
+        await this._dataSource.query(
+          `WITH d AS (
+             SELECT (COALESCE("deliveredAt", "cancelledAt") AT TIME ZONE '${APP_TIMEZONE}')::date AS day
+             FROM invoice WHERE id = $1
+           )
+           SELECT
+             EXISTS (
+               SELECT 1 FROM "businessSettlement" s, d
+               WHERE s."organizationalId" = $2 AND s."isPaid"
+                 AND s."periodType" = 'quincena'
+                 AND d.day BETWEEN s."periodStart" AND s."periodEnd"
+             ) AS business,
+             EXISTS (
+               SELECT 1 FROM "deliverySettlement" s, d
+               WHERE s."deliveryUserId" = $3 AND s."isPaid"
+                 AND s."periodType" = 'quincena'
+                 AND d.day BETWEEN s."periodStart" AND s."periodEnd"
+             ) AS rider`,
+          [
+            invoice.id,
+            invoice.organizationalId,
+            invoice.deliveryUserId ?? null,
+          ],
+        );
+      if (rows[0]?.business) {
+        throw new ConflictException(
+          'Este pedido ya está en una quincena COBRADA al negocio. Desmarca ese cobro antes de eliminarlo.',
+        );
+      }
+      if (rows[0]?.rider) {
+        throw new ConflictException(
+          'Este pedido ya está en una quincena PAGADA al repartidor. Desmarca ese pago antes de eliminarlo.',
+        );
+      }
+    }
+
+    await this._invoiceRepository.delete(id);
+
+    // Archivos propios del pedido (comprobante, foto de entrega fallida).
+    for (const url of [invoice.paymentProofUrl, invoice.deliveryFailPhotoUrl]) {
+      await this.deleteFileQuietly(url);
+    }
+    // La foto de la casa es compartida con la dirección y otros pedidos:
+    // solo se borra si ya nadie la referencia.
+    const photo = invoice.deliveryPhotoUrl;
+    if (photo) {
+      const [byInvoices, byAddresses] = await Promise.all([
+        this._invoiceRepository.count({ where: { deliveryPhotoUrl: photo } }),
+        this._userAddressRepository.count({ where: { photoUrl: photo } }),
+      ]);
+      if (!byInvoices && !byAddresses) await this.deleteFileQuietly(photo);
+    }
+
+    // Las pantallas abiertas recargan con cualquier 'invoice:updated'; se usa
+    // ese evento (y no uno nuevo) para que también lo entiendan los builds
+    // que ya están en las tiendas.
+    const payload = { id: invoice.id, deleted: true };
+    this._gateway.emitToUser(invoice.userId, 'invoice:updated', payload);
+    this._gateway.emitToOrg(
+      invoice.organizationalId,
+      'invoice:updated',
+      payload,
+    );
+    if (invoice.deliveryUserId) {
+      this._gateway.emitToDelivery(
+        invoice.deliveryUserId,
+        'invoice:updated',
+        payload,
+      );
+    } else {
+      // Pudo estar en "Disponibles" de todos los repartidores.
+      this._gateway.emitToDeliveries('invoice:taken', { id: invoice.id });
+    }
+  }
+
+  private async deleteFileQuietly(url?: string | null): Promise<void> {
+    const publicId = this._localStorageService.publicIdFromUrl(url);
+    if (!publicId) return;
+    try {
+      await this._localStorageService.deleteImage(publicId);
+    } catch {
+      // Un archivo que ya no está no debe impedir el borrado del pedido.
     }
   }
 

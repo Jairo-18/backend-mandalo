@@ -365,12 +365,17 @@ export class DeliverySettlementService {
    * `deliveryFee`) y reparte Mándalo/repartidor POR PEDIDO — no se puede
    * sumar primero y repartir después: la fórmula tiene un tramo base fijo
    * por pedido, sumar rompería el cálculo. `onlyStart` limita a una quincena.
+   *
+   * También los FALLIDOS (cancelados tras "No se pudo entregar") pero SOLO si
+   * NO se pagaron en efectivo: con transferencia aprobada el pago ya existía y
+   * el repartidor cobra su viaje; en efectivo el cliente no pagó y el
+   * repartidor pierde (decisión del usuario, 2026-10-09). Fecha: cancelación.
    */
   private async aggregateQuincenas(
     deliveryUserId: string,
     onlyStart?: string,
   ): Promise<QuincenaTotals[]> {
-    const localDate = `invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}'`;
+    const localDate = `(COALESCE(invoice."deliveredAt", CASE WHEN invoice."deliveryFailedAt" IS NOT NULL THEN invoice."cancelledAt" END)) AT TIME ZONE '${APP_TIMEZONE}'`;
     const bucketExpr = `CASE WHEN EXTRACT(DAY FROM ${localDate}) <= 15
       THEN date_trunc('month', ${localDate})
       ELSE date_trunc('month', ${localDate}) + interval '15 days' END`;
@@ -378,6 +383,7 @@ export class DeliverySettlementService {
     const query = this._invoiceRepository
       .createQueryBuilder('invoice')
       .innerJoin('invoice.stateType', 'stateType')
+      .leftJoin('invoice.paidType', 'paidType')
       .select(`to_char(${bucketExpr}, 'YYYY-MM-DD')`, 'periodStart')
       .addSelect('invoice."deliveryFee"', 'deliveryFee')
       .addSelect('invoice."deliveryMandaloCut"', 'deliveryMandaloCut')
@@ -388,8 +394,16 @@ export class DeliverySettlementService {
       .addSelect('invoice."demandSurcharge"', 'demandSurcharge')
       .addSelect('invoice."retryFeeCharged"', 'retryFeeCharged')
       .where('invoice."deliveryUserId" = :uid', { uid: deliveryUserId })
-      .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
-      .andWhere('invoice."deliveredAt" IS NOT NULL');
+      .andWhere(
+        `((stateType.code = :delivered AND invoice."deliveredAt" IS NOT NULL)
+          OR (stateType.code = :cancelled AND invoice."deliveryFailedAt" IS NOT NULL
+              AND invoice."cancelledAt" IS NOT NULL AND paidType.code <> :cash))`,
+        {
+          delivered: StateTypeCode.DELIVERED,
+          cancelled: StateTypeCode.CANCELLED,
+          cash: 'EFEC',
+        },
+      );
 
     if (onlyStart) {
       query.andWhere(`${bucketExpr} = to_date(:onlyStart, 'YYYY-MM-DD')`, { onlyStart });

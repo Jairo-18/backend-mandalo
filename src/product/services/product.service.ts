@@ -11,6 +11,7 @@ import { Product } from '../../shared/entities/product.entity';
 import { Organizational } from '../../shared/entities/organizational.entity';
 import { User } from '../../shared/entities/user.entity';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
+import { InvoiceGateway } from '../../invoice/invoice.gateway';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
@@ -33,7 +34,25 @@ export class ProductService {
     private readonly _categoryTypeRepository: CategoryTypeRepository,
     private readonly _invoiceDetailRepository: InvoiceDetailRepository,
     private readonly _localStorageService: LocalStorageService,
+    private readonly _gateway: InvoiceGateway,
   ) {}
+
+  /**
+   * Avisa en vivo a TODOS los dispositivos del negocio (room `org:{id}`) que
+   * su catálogo cambió: con la misma cuenta abierta en dos teléfonos, el otro
+   * recarga "Mis productos" sin tener que salir y volver (pedido de un
+   * cliente real).
+   */
+  private notifyCatalogChanged(
+    organizationalId: number,
+    productId: number,
+    action: 'created' | 'updated' | 'deleted',
+  ): void {
+    this._gateway.emitToOrg(organizationalId, 'product:changed', {
+      productId,
+      action,
+    });
+  }
 
   /** Estados de pedido que ya no pueden verse afectados por borrar el producto. */
   private static readonly TERMINAL_STATES = [
@@ -62,7 +81,9 @@ export class ProductService {
       ...dto,
       organizationalId: organizational.id,
     });
-    return await this._productRepository.save(product);
+    const saved = await this._productRepository.save(product);
+    this.notifyCatalogChanged(organizational.id, saved.id, 'created');
+    return saved;
   }
 
   async findOne(user: User, id: number): Promise<Product> {
@@ -122,13 +143,18 @@ export class ProductService {
     await this.assertCategoryExists(dto.categoryTypeId);
 
     Object.assign(product, dto);
-    return await this._productRepository.save(product);
+    const saved = await this._productRepository.save(product);
+    this.notifyCatalogChanged(saved.organizationalId, saved.id, 'updated');
+    return saved;
   }
 
   async delete(user: User, id: number): Promise<void> {
     const product = await this.findOne(user, id);
     await this.assertNoActiveOrders(product.id);
+    // `remove` deja el id en undefined: se guardan antes para el aviso.
+    const { organizationalId } = product;
     await this._productRepository.remove(product);
+    this.notifyCatalogChanged(organizationalId, id, 'deleted');
     // Las fotos del producto se borran del disco (solo las subidas propias).
     for (const url of product.images ?? []) {
       const publicId = this._localStorageService.publicIdFromUrl(url);
@@ -151,6 +177,7 @@ export class ProductService {
 
     product.images = [...(product.images ?? []), imageUrl];
     await this._productRepository.save(product);
+    this.notifyCatalogChanged(product.organizationalId, product.id, 'updated');
 
     return { imageUrl, images: product.images };
   }
@@ -176,6 +203,7 @@ export class ProductService {
 
     product.images = (product.images ?? []).filter((image) => !urls.includes(image));
     await this._productRepository.save(product);
+    this.notifyCatalogChanged(product.organizationalId, product.id, 'updated');
 
     for (const url of urls) {
       const publicId = this._localStorageService.publicIdFromUrl(url);

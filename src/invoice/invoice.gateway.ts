@@ -161,18 +161,34 @@ export class InvoiceGateway
     this.emitToOrg(auth.organizationalId, 'delivery:position', payload);
   }
 
+  // ---------- app en primer / segundo plano ----------
+
   /**
-   * ¿Hay algún socket escuchando esta room? Lo usa el chat para mandar push
-   * SOLO cuando el destinatario no está conectado (evita la doble
-   * notificación con la app abierta). Con una instancia el adapter es local.
+   * La app avisa cuándo pasa a segundo plano y cuándo vuelve. El socket puede
+   * seguir "conectado" un buen rato con la app minimizada (Android mantiene el
+   * JS vivo; iOS la suspende pero el servidor no se entera hasta el timeout
+   * del ping, ~45 s), y en ese hueco el chat no mandaba push y el mensaje
+   * llegaba mudo. Los builds viejos nunca mandan este evento: para ellos el
+   * socket cuenta como primer plano, igual que antes.
    */
-  hasListeners(room: string): boolean {
-    const adapter = (
-      this.server as unknown as {
-        adapter?: { rooms?: Map<string, Set<string>> };
-      }
-    ).adapter;
-    return !!adapter?.rooms?.get(room)?.size;
+  @SubscribeMessage('app:state')
+  handleAppState(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { state?: string },
+  ): void {
+    client.data.background = body?.state === 'background';
+  }
+
+  /**
+   * ¿Hay algún socket con la app EN PRIMER PLANO en esta room? Lo usa el chat
+   * para mandar push solo cuando el destinatario no tiene la app abierta (con
+   * la app abierta el aviso lo da la propia app). Con una instancia el
+   * adapter es local.
+   */
+  async hasForegroundListeners(room: string): Promise<boolean> {
+    if (!this.server) return false;
+    const sockets = await this.server.in(room).fetchSockets();
+    return sockets.some((s) => !s.data?.background);
   }
 
   // ---------- emisores (los usa el service) ----------

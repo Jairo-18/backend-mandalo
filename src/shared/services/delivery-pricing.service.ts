@@ -27,8 +27,9 @@ export type PricingValues = Pick<
   | 'demandThreshold'
   | 'retryFee'
   | 'waitMinutes'
-  | 'serviceFeePercent'
-  | 'serviceFeeCap'
+  | 'serviceFeeThreshold'
+  | 'serviceFeeBelow'
+  | 'serviceFeeAbove'
 >;
 
 /** Tarifa efectiva de un municipio + de dónde salió. */
@@ -54,8 +55,9 @@ export const PRICING_FIELDS: (keyof PricingValues)[] = [
   'demandThreshold',
   'retryFee',
   'waitMinutes',
-  'serviceFeePercent',
-  'serviceFeeCap',
+  'serviceFeeThreshold',
+  'serviceFeeBelow',
+  'serviceFeeAbove',
 ];
 
 /**
@@ -79,8 +81,9 @@ export const FALLBACK_PRICING: PricingValues = {
   demandThreshold: 30,
   retryFee: 6000,
   waitMinutes: 5,
-  serviceFeePercent: 5,
-  serviceFeeCap: 5000,
+  serviceFeeThreshold: 50000,
+  serviceFeeBelow: 800,
+  serviceFeeAbove: 1600,
 };
 
 /** Toda la tabla cabe en una sola key (1 general + ≤ un puñado de municipios). */
@@ -227,14 +230,14 @@ export class DeliveryPricingService {
   }
 
   /**
-   * Tarifa de servicio: % del subtotal (SIN domicilio), 100% de Mándalo,
-   * con tope `serviceFeeCap` (0 = sin tope).
+   * Tarifa de servicio por tramos sobre el subtotal (SIN domicilio), 100% de
+   * Mándalo: `serviceFeeBelow` si el subtotal es menor a
+   * `serviceFeeThreshold`; `serviceFeeAbove` desde el umbral en adelante.
    */
   serviceFee(pricing: PricingValues, subtotal: number): number {
-    const fee = this.round2((subtotal * pricing.serviceFeePercent) / 100);
-    return pricing.serviceFeeCap > 0
-      ? Math.min(fee, pricing.serviceFeeCap)
-      : fee;
+    return subtotal < pricing.serviceFeeThreshold
+      ? pricing.serviceFeeBelow
+      : pricing.serviceFeeAbove;
   }
 
   /**

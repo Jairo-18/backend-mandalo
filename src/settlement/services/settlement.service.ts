@@ -357,12 +357,18 @@ export class SettlementService {
    * Suma los pedidos ENTREGADOS del negocio agrupados por quincena (1–15 /
    * 16–fin de mes) del `deliveredAt` en hora Colombia. `onlyStart` limita a
    * una única quincena (para el cobro).
+   *
+   * También los FALLIDOS: cancelados después de "No se pudo entregar"
+   * (`deliveryFailedAt` lleno), con la fecha de cancelación. Decisión del
+   * usuario (2026-10-09): el negocio ya recibió la plata (transferencia del
+   * cliente o efectivo que adelantó el repartidor), así que debe TODO como un
+   * pedido normal — comisión + tarifa de servicio + domicilio.
    */
   private async aggregateQuincenas(
     organizationalId: number,
     onlyStart?: string,
   ): Promise<QuincenaTotals[]> {
-    const localDate = `invoice."deliveredAt" AT TIME ZONE '${APP_TIMEZONE}'`;
+    const localDate = `(COALESCE(invoice."deliveredAt", CASE WHEN invoice."deliveryFailedAt" IS NOT NULL THEN invoice."cancelledAt" END)) AT TIME ZONE '${APP_TIMEZONE}'`;
     // Día 1 del mes si la fecha es <=15, día 16 si no.
     const bucketExpr = `CASE WHEN EXTRACT(DAY FROM ${localDate}) <= 15
       THEN date_trunc('month', ${localDate})
@@ -380,8 +386,15 @@ export class SettlementService {
         'deliveryTotal',
       )
       .where('invoice."organizationalId" = :oid', { oid: organizationalId })
-      .andWhere('stateType.code = :delivered', { delivered: StateTypeCode.DELIVERED })
-      .andWhere('invoice."deliveredAt" IS NOT NULL')
+      .andWhere(
+        `((stateType.code = :delivered AND invoice."deliveredAt" IS NOT NULL)
+          OR (stateType.code = :cancelled AND invoice."deliveryFailedAt" IS NOT NULL
+              AND invoice."cancelledAt" IS NOT NULL))`,
+        {
+          delivered: StateTypeCode.DELIVERED,
+          cancelled: StateTypeCode.CANCELLED,
+        },
+      )
       .groupBy(bucketExpr)
       .orderBy(bucketExpr, 'DESC');
 

@@ -152,22 +152,36 @@ export class UpdateMunicipalityPricingDto {
   waitMinutes?: number;
 
   @ApiPropertyOptional({
-    description: '% del subtotal cobrado como tarifa de servicio',
-    example: 5,
+    description:
+      'Tarifa de servicio: umbral del subtotal (COP) entre la tarifa baja y la alta',
+    example: 50000,
   })
   @IsOptional()
-  @IsNumber(MONEY)
-  @Min(0)
-  @Max(100)
-  serviceFeePercent?: number;
-
-  @ApiPropertyOptional({
-    description: 'Tope de la tarifa de servicio (COP, 0 = sin tope)',
-    example: 5000,
+  @IsNumber(MONEY, {
+    message: 'El umbral de la tarifa de servicio debe ser un número',
   })
-  @IsOptional()
-  @IsNumber(MONEY)
   @Min(0)
   @Max(MONEY_MAX)
-  serviceFeeCap?: number;
+  serviceFeeThreshold?: number;
+
+  @ApiPropertyOptional({
+    description: 'Tarifa de servicio (COP) si el subtotal es menor al umbral',
+    example: 800,
+  })
+  @IsOptional()
+  @IsNumber(MONEY, { message: 'La tarifa baja de servicio debe ser un número' })
+  @Min(0)
+  @Max(MONEY_MAX)
+  serviceFeeBelow?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Tarifa de servicio (COP) si el subtotal es igual o mayor al umbral',
+    example: 1600,
+  })
+  @IsOptional()
+  @IsNumber(MONEY, { message: 'La tarifa alta de servicio debe ser un número' })
+  @Min(0)
+  @Max(MONEY_MAX)
+  serviceFeeAbove?: number;
 }

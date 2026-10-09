@@ -30,15 +30,17 @@ const OPERATING_DEPARTMENT_CODE = '86';
 export const SUPERADMIN_ONLY_FIELDS: (keyof PricingValues)[] = [
   'baseMandaloCut',
   'extraMandaloRate',
-  'serviceFeePercent',
-  'serviceFeeCap',
+  'serviceFeeThreshold',
+  'serviceFeeBelow',
+  'serviceFeeAbove',
 ];
 
 const FIELD_LABELS: Partial<Record<keyof PricingValues, string>> = {
   baseMandaloCut: 'la parte de Mándalo en la tarifa base',
   extraMandaloRate: 'el % de Mándalo en el excedente por km',
-  serviceFeePercent: 'el % de la tarifa de servicio',
-  serviceFeeCap: 'el tope de la tarifa de servicio',
+  serviceFeeThreshold: 'el umbral de la tarifa de servicio',
+  serviceFeeBelow: 'la tarifa de servicio baja',
+  serviceFeeAbove: 'la tarifa de servicio alta',
 };
 
 type Editor = { id: string; fullName: string } | null;

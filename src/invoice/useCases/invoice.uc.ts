@@ -66,6 +66,10 @@ export class InvoiceUC {
     return this._invoiceService.changeState(user, id, dto);
   }
 
+  remove(user: User, id: number) {
+    return this._invoiceService.remove(user, id);
+  }
+
   uploadPaymentProof(user: User, id: number, file: Express.Multer.File) {
     return this._invoiceService.uploadPaymentProof(user, id, file);
   }

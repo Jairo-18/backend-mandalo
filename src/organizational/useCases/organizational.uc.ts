@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { OrganizationalService } from '../services/organizational.service';
+import {
+  OrganizationalService,
+  PaymentQrBank,
+} from '../services/organizational.service';
 import { User } from '../../shared/entities/user.entity';
 import {
   CreateOrganizationalDto,
@@ -49,12 +52,21 @@ export class OrganizationalUC {
     return this._organizationalService.updateLogo(id, file, admin);
   }
 
-  updatePaymentQr(id: number, file: Express.Multer.File, admin?: User) {
-    return this._organizationalService.updatePaymentQr(id, file, admin);
+  updatePaymentQr(
+    id: number,
+    file: Express.Multer.File,
+    admin?: User,
+    bank?: PaymentQrBank,
+  ) {
+    return this._organizationalService.updatePaymentQr(id, file, admin, bank);
   }
 
-  updateMyPaymentQr(userId: string, file: Express.Multer.File) {
-    return this._organizationalService.updateMyPaymentQr(userId, file);
+  updateMyPaymentQr(
+    userId: string,
+    file: Express.Multer.File,
+    bank?: PaymentQrBank,
+  ) {
+    return this._organizationalService.updateMyPaymentQr(userId, file, bank);
   }
 
   removeLogo(id: number, admin?: User) {
@@ -65,12 +77,12 @@ export class OrganizationalUC {
     return this._organizationalService.removeMyLogo(userId);
   }
 
-  removePaymentQr(id: number, admin?: User) {
-    return this._organizationalService.removePaymentQr(id, admin);
+  removePaymentQr(id: number, admin?: User, bank?: PaymentQrBank) {
+    return this._organizationalService.removePaymentQr(id, admin, bank);
   }
 
-  removeMyPaymentQr(userId: string) {
-    return this._organizationalService.removeMyPaymentQr(userId);
+  removeMyPaymentQr(userId: string, bank?: PaymentQrBank) {
+    return this._organizationalService.removeMyPaymentQr(userId, bank);
   }
 
   resolveMapsUrl(url: string) {

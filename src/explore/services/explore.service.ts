@@ -436,6 +436,7 @@ export class ExploreService {
       bancolombiaAccount: organizational.bancolombiaAccount,
       bancolombiaAccountType: organizational.bancolombiaAccountType,
       bancolombiaQrUrl: organizational.bancolombiaQrUrl,
+      nequiQrUrl: organizational.nequiQrUrl,
     };
   }
 }

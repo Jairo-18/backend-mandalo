@@ -95,12 +95,14 @@ export class CreateOrganizationalDto {
   municipalityId?: number;
 
   @ApiPropertyOptional({
-    description: 'Usuario dueño/representante legal (rol NEGO)',
+    description:
+      'Usuario dueño/representante legal (rol NEGO). En edición, null lo desvincula.',
     example: 'b6a4f6a0-1c2d-4e3f-9a8b-7c6d5e4f3a2b',
+    nullable: true,
   })
   @IsOptional()
   @IsUUID()
-  legalPersonId?: string;
+  legalPersonId?: string | null;
 
   @ApiPropertyOptional({
     description:

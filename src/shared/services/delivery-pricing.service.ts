@@ -190,7 +190,9 @@ export class DeliveryPricingService {
       distanceKm <= pricing.baseKm
         ? pricing.baseFee
         : pricing.baseFee + (distanceKm - pricing.baseKm) * pricing.extraKmRate;
-    return this.round2(raw);
+    // Al peso: los km fraccionados daban centavos ($34.136,76) y las filas
+    // redondeadas en pantalla podían no sumar el total mostrado.
+    return Math.round(raw);
   }
 
   /**
@@ -198,7 +200,7 @@ export class DeliveryPricingService {
    * se puede medir la distancia: la tarifa base del municipio (el mínimo).
    */
   fallbackFee(pricing: PricingValues): number {
-    return this.round2(pricing.baseFee);
+    return Math.round(pricing.baseFee);
   }
 
   /**
@@ -248,22 +250,19 @@ export class DeliveryPricingService {
    * el pedido y el resultado se congela en la factura.
    */
   splitFee(pricing: PricingValues, deliveryFee: number): DeliveryFeeSplit {
+    // Al peso, y el repartidor recibe el resto exacto (las dos partes
+    // siempre suman `deliveryFee`).
     if (deliveryFee <= pricing.baseFee) {
-      return {
-        mandaloCut: this.round2(Math.min(pricing.baseMandaloCut, deliveryFee)),
-        riderCut: this.round2(
-          Math.max(deliveryFee - pricing.baseMandaloCut, 0),
-        ),
-      };
+      const mandaloCut = Math.round(
+        Math.min(pricing.baseMandaloCut, deliveryFee),
+      );
+      return { mandaloCut, riderCut: Math.max(deliveryFee - mandaloCut, 0) };
     }
     const overage = deliveryFee - pricing.baseFee;
-    const mandaloCut = this.round2(
+    const mandaloCut = Math.round(
       pricing.baseMandaloCut + (overage * pricing.extraMandaloRate) / 100,
     );
-    return {
-      mandaloCut,
-      riderCut: this.round2(deliveryFee - mandaloCut),
-    };
+    return { mandaloCut, riderCut: deliveryFee - mandaloCut };
   }
 
   // ---------- helpers ----------

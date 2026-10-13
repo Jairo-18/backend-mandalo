@@ -178,7 +178,7 @@ export class SettlementService {
     }
 
     const rate = organizational.commissionOrderRate;
-    const commissionTotal = this.round2((row.salesTotal * rate) / 100);
+    const commissionTotal = Math.round((row.salesTotal * rate) / 100);
 
     const settlement =
       existing ??
@@ -243,7 +243,7 @@ export class SettlementService {
     rate: number,
     settlement: BusinessSettlement | null,
   ): SettlementPeriodItem {
-    const commissionTotal = this.round2((row.salesTotal * rate) / 100);
+    const commissionTotal = Math.round((row.salesTotal * rate) / 100);
     return {
       periodType: SettlementPeriodType.QUINCENA,
       periodStart: row.periodStart,
@@ -283,12 +283,13 @@ export class SettlementService {
     // quincenas pagadas), y ESE resultado se vuelve a juntar por año.
     if (granularity === 'year') {
       const months = this.rollUp(quincenas, 'month', rate);
-      const byYear = new Map<string, { orders: number; sales: number; serviceFee: number; delivery: number; paid: number; total: number }>();
+      const byYear = new Map<string, { orders: number; sales: number; commission: number; serviceFee: number; delivery: number; paid: number; total: number }>();
       for (const m of months) {
         const year = m.periodStart.slice(0, 4);
-        const acc = byYear.get(year) ?? { orders: 0, sales: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
+        const acc = byYear.get(year) ?? { orders: 0, sales: 0, commission: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
         acc.orders += m.ordersCount;
         acc.sales += m.salesTotal;
+        acc.commission += m.commissionTotal;
         acc.serviceFee += m.serviceFeeTotal;
         acc.delivery += m.deliveryTotal;
         acc.total += 1;
@@ -299,7 +300,9 @@ export class SettlementService {
         .sort((a, b) => (a[0] < b[0] ? 1 : -1))
         .map(([year, acc]) => {
           const periodStart = `${year}-01-01`;
-          const commissionTotal = this.round2((acc.sales * rate) / 100);
+          // Suma de las comisiones (al peso) de sus meses: el año cuadra
+          // con lo que muestran los meses.
+          const commissionTotal = this.round2(acc.commission);
           return {
             periodType: SettlementPeriodType.YEAR,
             periodStart,
@@ -318,12 +321,13 @@ export class SettlementService {
         });
     }
 
-    const byMonth = new Map<string, { orders: number; sales: number; serviceFee: number; delivery: number; paid: number; total: number }>();
+    const byMonth = new Map<string, { orders: number; sales: number; commission: number; serviceFee: number; delivery: number; paid: number; total: number }>();
     for (const q of quincenas) {
       const month = q.periodStart.slice(0, 7); // YYYY-MM
-      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
+      const acc = byMonth.get(month) ?? { orders: 0, sales: 0, commission: 0, serviceFee: 0, delivery: 0, paid: 0, total: 0 };
       acc.orders += q.ordersCount;
       acc.sales += q.salesTotal;
+      acc.commission += q.commissionTotal;
       acc.serviceFee += q.serviceFeeTotal;
       acc.delivery += q.deliveryTotal;
       acc.total += 1;
@@ -334,7 +338,9 @@ export class SettlementService {
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
       .map(([month, acc]) => {
         const periodStart = `${month}-01`;
-        const commissionTotal = this.round2((acc.sales * rate) / 100);
+        // Suma de las comisiones (al peso) de sus quincenas: el mes cuadra
+        // con lo que muestran las quincenas.
+        const commissionTotal = this.round2(acc.commission);
         return {
           periodType: SettlementPeriodType.MONTH,
           periodStart,

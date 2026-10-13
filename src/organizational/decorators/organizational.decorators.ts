@@ -6,6 +6,7 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
 } from '@nestjs/swagger';
 import {
   CreatedRecordResponseDto,
@@ -126,7 +127,13 @@ export function UploadPaymentQrDocs() {
   return applyDecorators(
     ApiBearerAuth(),
     ApiOperation({
-      summary: 'Subir/reemplazar el QR de Bancolombia del negocio',
+      summary: 'Subir/reemplazar un QR de pago del negocio (Bancolombia o Nequi Bre-B)',
+    }),
+    ApiQuery({
+      name: 'bank',
+      required: false,
+      enum: ['bancolombia', 'nequi'],
+      description: 'Banco del QR (por defecto bancolombia)',
     }),
     ApiConsumes('multipart/form-data'),
     ApiBody({
@@ -154,7 +161,13 @@ export function RemovePaymentQrDocs() {
   return applyDecorators(
     ApiBearerAuth(),
     ApiOperation({
-      summary: 'Quitar el QR de Bancolombia del negocio (opcional)',
+      summary: 'Quitar un QR de pago del negocio (opcional)',
+    }),
+    ApiQuery({
+      name: 'bank',
+      required: false,
+      enum: ['bancolombia', 'nequi'],
+      description: 'Banco del QR (por defecto bancolombia)',
     }),
     ApiOkResponse({ type: DeleteRecordResponseDto }),
   );

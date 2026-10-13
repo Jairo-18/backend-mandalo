@@ -36,6 +36,19 @@ import {
 } from '../dtos/organizational.dto';
 
 /** Relaciones que se cargan al devolver un negocio (listado y detalle). */
+/** Banco del QR de pago (`?bank=` en los endpoints payment-qr). */
+export enum PaymentQrBank {
+  BANCOLOMBIA = 'bancolombia',
+  NEQUI = 'nequi',
+}
+
+type PaymentQrColumn = 'bancolombiaQrUrl' | 'nequiQrUrl';
+
+const PAYMENT_QR_COLUMN: Record<PaymentQrBank, PaymentQrColumn> = {
+  [PaymentQrBank.BANCOLOMBIA]: 'bancolombiaQrUrl',
+  [PaymentQrBank.NEQUI]: 'nequiQrUrl',
+};
+
 const RELATIONS = [
   'identificationType',
   'municipality',
@@ -286,9 +299,10 @@ export class OrganizationalService {
   async updateMyPaymentQr(
     userId: string,
     file: Express.Multer.File,
-  ): Promise<{ bancolombiaQrUrl: string }> {
+    bank: PaymentQrBank = PaymentQrBank.BANCOLOMBIA,
+  ): Promise<Partial<Record<PaymentQrColumn, string>>> {
     const mine = await this.findMine(userId);
-    return this.updatePaymentQr(mine.id, file);
+    return this.updatePaymentQr(mine.id, file, undefined, bank);
   }
 
   async update(
@@ -336,6 +350,19 @@ export class OrganizationalService {
     }
 
     Object.assign(organizational, data);
+    // TypeORM: con la relación cargada (RELATIONS), save() la prioriza sobre
+    // el FK nuevo y el cambio no se guardaba (p. ej. quitar o cambiar el
+    // representante legal). Se suelta la relación de cada FK que viene.
+    if (data.legalPersonId !== undefined) {
+      organizational.legalPerson = undefined;
+    }
+    if (data.municipalityId !== undefined) {
+      organizational.municipality = undefined;
+    }
+    if (data.departmentId !== undefined) organizational.department = undefined;
+    if (data.identificationTypeId !== undefined) {
+      organizational.identificationType = undefined;
+    }
     if (tagIds !== undefined) {
       organizational.tags = await this.resolveTags(tagIds);
     }
@@ -375,10 +402,13 @@ export class OrganizationalService {
       organizational.logoUrl,
     );
     if (logoPublicId) await this._localStorageService.deleteImage(logoPublicId);
-    const qrPublicId = this._localStorageService.publicIdFromUrl(
+    for (const qrUrl of [
       organizational.bancolombiaQrUrl,
-    );
-    if (qrPublicId) await this._localStorageService.deleteImage(qrPublicId);
+      organizational.nequiQrUrl,
+    ]) {
+      const qrPublicId = this._localStorageService.publicIdFromUrl(qrUrl);
+      if (qrPublicId) await this._localStorageService.deleteImage(qrPublicId);
+    }
 
     await this._organizationalRepository.remove(organizational);
   }
@@ -411,15 +441,18 @@ export class OrganizationalService {
   }
 
   /**
-   * Sube/reemplaza la imagen del QR de Bancolombia (mismo flujo que el logo:
-   * guarda la nueva, apunta la columna y borra la anterior del disco).
+   * Sube/reemplaza la imagen de un QR de pago (Bancolombia o Nequi Bre-B;
+   * mismo flujo que el logo: guarda la nueva, apunta la columna y borra la
+   * anterior del disco). Devuelve `{ <columna>: url }`.
    */
   async updatePaymentQr(
     id: number,
     file: Express.Multer.File,
     admin?: User,
-  ): Promise<{ bancolombiaQrUrl: string }> {
+    bank: PaymentQrBank = PaymentQrBank.BANCOLOMBIA,
+  ): Promise<Partial<Record<PaymentQrColumn, string>>> {
     const organizational = await this.findOne(id, admin);
+    const column = PAYMENT_QR_COLUMN[bank];
 
     const { imageUrl } = await this._localStorageService.saveImage(
       file,
@@ -427,16 +460,14 @@ export class OrganizationalService {
     );
 
     const oldPublicId = this._localStorageService.publicIdFromUrl(
-      organizational.bancolombiaQrUrl,
+      organizational[column],
     );
-    await this._organizationalRepository.update(id, {
-      bancolombiaQrUrl: imageUrl,
-    });
+    await this._organizationalRepository.update(id, { [column]: imageUrl });
     if (oldPublicId) {
       await this._localStorageService.deleteImage(oldPublicId);
     }
 
-    return { bancolombiaQrUrl: imageUrl };
+    return { [column]: imageUrl };
   }
 
   /** Quita el logo del negocio (opcional): borra el archivo y limpia la columna. */
@@ -457,22 +488,30 @@ export class OrganizationalService {
     return this.removeLogo(mine.id);
   }
 
-  /** Quita el QR de Bancolombia (opcional): borra el archivo y limpia la columna. */
-  async removePaymentQr(id: number, admin?: User): Promise<void> {
+  /** Quita un QR de pago (opcional): borra el archivo y limpia la columna. */
+  async removePaymentQr(
+    id: number,
+    admin?: User,
+    bank: PaymentQrBank = PaymentQrBank.BANCOLOMBIA,
+  ): Promise<void> {
     const organizational = await this.findOne(id, admin);
+    const column = PAYMENT_QR_COLUMN[bank];
     const publicId = this._localStorageService.publicIdFromUrl(
-      organizational.bancolombiaQrUrl,
+      organizational[column],
     );
-    await this._organizationalRepository.update(id, { bancolombiaQrUrl: null });
+    await this._organizationalRepository.update(id, { [column]: null });
     if (publicId) {
       await this._localStorageService.deleteImage(publicId);
     }
   }
 
-  /** QR de Bancolombia del negocio propio (rol NEGO). */
-  async removeMyPaymentQr(userId: string): Promise<void> {
+  /** QR de pago del negocio propio (rol NEGO). */
+  async removeMyPaymentQr(
+    userId: string,
+    bank: PaymentQrBank = PaymentQrBank.BANCOLOMBIA,
+  ): Promise<void> {
     const mine = await this.findMine(userId);
-    return this.removePaymentQr(mine.id);
+    return this.removePaymentQr(mine.id, undefined, bank);
   }
 
   // ---------- helpers ----------

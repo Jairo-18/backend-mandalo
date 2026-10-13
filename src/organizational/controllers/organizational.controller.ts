@@ -5,6 +5,7 @@ import {
   Get,
   HttpStatus,
   Param,
+  ParseEnumPipe,
   ParseIntPipe,
   Patch,
   Post,
@@ -17,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { OrganizationalUC } from '../useCases/organizational.uc';
+import { PaymentQrBank } from '../services/organizational.service';
 import {
   CreateOrganizationalDto,
   PaginatedOrganizationalsParamsDto,
@@ -134,15 +136,25 @@ export class OrganizationalController {
     };
   }
 
-  /** Sube/reemplaza el QR de Bancolombia del negocio propio (rol NEGO). */
+  /**
+   * Sube/reemplaza un QR de pago del negocio propio (rol NEGO).
+   * `?bank=nequi` para el de Nequi Bre-B; sin `bank` es el de Bancolombia
+   * (así lo llaman los builds anteriores).
+   */
   @Post('mine/payment-qr')
   @UploadPaymentQrDocs()
   @UseInterceptors(FileInterceptor('file'))
   async uploadMyPaymentQr(
     @GetUser() user: User,
     @UploadedFile() file: Express.Multer.File,
+    @Query('bank', new ParseEnumPipe(PaymentQrBank, { optional: true }))
+    bank?: PaymentQrBank,
   ) {
-    const data = await this._organizationalUC.updateMyPaymentQr(user.id, file);
+    const data = await this._organizationalUC.updateMyPaymentQr(
+      user.id,
+      file,
+      bank,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago actualizado exitosamente',
@@ -161,13 +173,15 @@ export class OrganizationalController {
     };
   }
 
-  /** Quita el QR de Bancolombia del negocio propio (opcional, sin reemplazo). */
+  /** Quita un QR de pago del negocio propio (`?bank=` igual que al subir). */
   @Delete('mine/payment-qr')
   @RemovePaymentQrDocs()
   async removeMyPaymentQr(
     @GetUser() user: User,
+    @Query('bank', new ParseEnumPipe(PaymentQrBank, { optional: true }))
+    bank?: PaymentQrBank,
   ): Promise<DeleteRecordResponseDto> {
-    await this._organizationalUC.removeMyPaymentQr(user.id);
+    await this._organizationalUC.removeMyPaymentQr(user.id, bank);
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago eliminado exitosamente',
@@ -301,7 +315,7 @@ export class OrganizationalController {
     };
   }
 
-  /** Sube/reemplaza el QR de Bancolombia del negocio (admin). */
+  /** Sube/reemplaza un QR de pago del negocio (admin; `?bank=` como arriba). */
   @Post(':id/payment-qr')
   @UseGuards(RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
@@ -311,8 +325,15 @@ export class OrganizationalController {
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
+    @Query('bank', new ParseEnumPipe(PaymentQrBank, { optional: true }))
+    bank?: PaymentQrBank,
   ) {
-    const data = await this._organizationalUC.updatePaymentQr(id, file, user);
+    const data = await this._organizationalUC.updatePaymentQr(
+      id,
+      file,
+      user,
+      bank,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago actualizado exitosamente',
@@ -320,7 +341,7 @@ export class OrganizationalController {
     };
   }
 
-  /** Quita el QR de Bancolombia del negocio (admin, sin reemplazo). */
+  /** Quita un QR de pago del negocio (admin, sin reemplazo; `?bank=`). */
   @Delete(':id/payment-qr')
   @UseGuards(RolesGuard)
   @Roles(RoleTypeCode.ADMIN)
@@ -328,8 +349,10 @@ export class OrganizationalController {
   async removePaymentQr(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
+    @Query('bank', new ParseEnumPipe(PaymentQrBank, { optional: true }))
+    bank?: PaymentQrBank,
   ): Promise<DeleteRecordResponseDto> {
-    await this._organizationalUC.removePaymentQr(id, user);
+    await this._organizationalUC.removePaymentQr(id, user, bank);
     return {
       statusCode: HttpStatus.OK,
       message: 'QR de pago eliminado exitosamente',

@@ -83,7 +83,7 @@ export class Organizational {
 
   // Representante legal / dueño de la cuenta del negocio (rol NEGO)
   @Column('uuid', { nullable: true })
-  legalPersonId?: string;
+  legalPersonId?: string | null;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'legalPersonId' })
@@ -138,6 +138,10 @@ export class Organizational {
   // Imagen del QR de Bancolombia que sube el negocio (upload, no texto).
   @Column('varchar', { length: 500, nullable: true })
   bancolombiaQrUrl?: string | null;
+
+  // Imagen del QR Bre-B de Nequi (mismo flujo que el de Bancolombia).
+  @Column('varchar', { length: 500, nullable: true })
+  nequiQrUrl?: string | null;
 
   @Column('boolean', { default: true })
   isActive: boolean;

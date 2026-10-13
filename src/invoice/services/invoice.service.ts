@@ -344,7 +344,8 @@ export class InvoiceService {
         );
       }
       const discount = product.discount ?? 0;
-      const finalUnit = this.round2(product.priceSale * (1 - discount / 100));
+      // Al peso (mismo redondeo que `finalPrice` del front).
+      const finalUnit = Math.round(product.priceSale * (1 - discount / 100));
       const lineTotal = this.round2(finalUnit * item.quantity);
       subtotal = this.round2(subtotal + lineTotal);
 
@@ -1152,6 +1153,10 @@ export class InvoiceService {
         (invoice.deliverySurcharge ?? 0) + charged,
       );
       invoice.total = this.round2(invoice.total + charged);
+      // Segundo viaje: el repartidor vuelve a marcar "En sitio" y la espera
+      // corre de nuevo. Con el `arrivedAt` del primer intento, "No se pudo
+      // entregar" quedaba habilitado al instante (sin esperar al cliente).
+      invoice.arrivedAt = null;
     }
 
     // Marcar entregado exige haber marcado "En sitio" antes (reunión

@@ -1,0 +1,37 @@
+(node:75404) TimeoutNegativeWarning: -1792178228695 is a negative number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"ERROR","timestamp":"2026-10-16T19:17:08.709Z","logger":"kafkajs","message":"[Connection] Response CreateTopics(key: 19, version: 3)","broker":"localhost:9092","clientId":"notificaciones-consumer-A","error":"Topic creation errors","correlationId":2,"size":72}
+2026-10-16T19:17:08.719Z [consumer-A] escuchando pedidos.eventos en el grupo "notificaciones"
+{"level":"ERROR","timestamp":"2026-10-16T19:17:08.728Z","logger":"kafkajs","message":"[Connection] Response GroupCoordinator(key: 10, version: 2)","broker":"localhost:9092","clientId":"notificaciones-consumer-A","error":"The group coordinator is not available","correlationId":2,"size":55}
+2026-10-16T19:17:15.929Z [consumer-A] unido al grupo "notificaciones" (líder: true) → particiones asignadas: [1]
+2026-10-16T19:18:15.457Z [consumer-A] partición=1 offset=0 key=983900 | 🛍️  Nuevo pedido #983900 en "Comidas Rapidas 24 H" por $55.000
+2026-10-16T19:18:15.745Z [consumer-A] partición=1 offset=1 key=983900 | 📦 Pedido #983900 → Aceptado
+2026-10-16T19:18:16.057Z [consumer-A] partición=1 offset=2 key=983900 | 📦 Pedido #983900 → En preparación
+2026-10-16T19:18:18.548Z [consumer-A] partición=1 offset=3 key=983904 | 🛍️  Nuevo pedido #983904 en "Pizzería Villagarzón" por $63.000
+2026-10-16T19:18:18.860Z [consumer-A] partición=1 offset=4 key=983905 | 🛍️  Nuevo pedido #983905 en "Droguería Central" por $51.000
+2026-10-16T19:18:18.860Z [consumer-A] resumen: 5 eventos | {"PEND":3,"ACEP":1,"PREP":1}
+2026-10-16T19:18:19.169Z [consumer-A] partición=1 offset=5 key=983905 | 📦 Pedido #983905 → Aceptado
+2026-10-16T19:18:19.480Z [consumer-A] partición=1 offset=6 key=983905 | 📦 Pedido #983905 → En preparación
+2026-10-16T19:18:19.792Z [consumer-A] partición=1 offset=7 key=983905 | 📦 Pedido #983905 → En ruta
+{"level":"ERROR","timestamp":"2026-10-16T19:18:59.892Z","logger":"kafkajs","message":"[Connection] Response Heartbeat(key: 12, version: 3)","broker":"localhost:9092","clientId":"notificaciones-consumer-A","error":"The group is rebalancing, so a rejoin is needed","correlationId":40,"size":10}
+{"level":"WARN","timestamp":"2026-10-16T19:18:59.892Z","logger":"kafkajs","message":"[Runner] The group is rebalancing, re-joining","groupId":"notificaciones","memberId":"notificaciones-consumer-A-1b790599-c772-46ed-9a83-5a343d42fe73","error":"The group is rebalancing, so a rejoin is needed"}
+2026-10-16T19:18:59.892Z [consumer-A] rebalanceando el grupo…
+2026-10-16T19:18:59.895Z [consumer-A] unido al grupo "notificaciones" (líder: true) → particiones asignadas: [0, 1]
+2026-10-16T19:19:00.898Z [consumer-A] partición=0 offset=7 key=922200 | 🛍️  Nuevo pedido #922200 en "Comidas Rapidas 24 H" por $18.000
+2026-10-16T19:19:01.200Z [consumer-A] partición=0 offset=8 key=922200 | 📦 Pedido #922200 → Aceptado
+2026-10-16T19:19:01.200Z [consumer-A] resumen: 10 eventos | {"PEND":4,"ACEP":3,"PREP":2,"RUTA":1}
+2026-10-16T19:19:01.512Z [consumer-A] partición=0 offset=9 key=922200 | 📦 Pedido #922200 → En preparación
+2026-10-16T19:19:01.826Z [consumer-A] partición=0 offset=10 key=922200 | 📦 Pedido #922200 → En ruta
+2026-10-16T19:19:02.138Z [consumer-A] partición=0 offset=11 key=922200 | 📦 Pedido #922200 → Entregado
+2026-10-16T19:19:02.451Z [consumer-A] partición=0 offset=12 key=922201 | 🛍️  Nuevo pedido #922201 en "Pizzería Villagarzón" por $39.000
+2026-10-16T19:19:02.762Z [consumer-A] partición=0 offset=13 key=922201 | 📦 Pedido #922201 → Aceptado
+2026-10-16T19:19:02.762Z [consumer-A] resumen: 15 eventos | {"PEND":5,"ACEP":4,"PREP":3,"RUTA":2,"ENTR":1}
+2026-10-16T19:19:03.075Z [consumer-A] partición=0 offset=14 key=922201 | 📦 Pedido #922201 → En preparación
+2026-10-16T19:19:03.389Z [consumer-A] partición=0 offset=15 key=922201 | 📦 Pedido #922201 → En ruta
+2026-10-16T19:19:03.701Z [consumer-A] partición=0 offset=16 key=922202 | 🛍️  Nuevo pedido #922202 en "Droguería Central" por $35.000
+2026-10-16T19:19:04.012Z [consumer-A] partición=0 offset=17 key=922202 | 📦 Pedido #922202 → Aceptado
+2026-10-16T19:19:04.323Z [consumer-A] partición=0 offset=18 key=922202 | 📦 Pedido #922202 → En preparación
+2026-10-16T19:19:04.323Z [consumer-A] resumen: 20 eventos | {"PEND":6,"ACEP":5,"PREP":5,"RUTA":3,"ENTR":1}
+2026-10-16T19:19:04.635Z [consumer-A] partición=0 offset=19 key=922202 | 📦 Pedido #922202 → En ruta
+2026-10-16T19:19:04.946Z [consumer-A] partición=0 offset=20 key=922202 | 📦 Pedido #922202 → Entregado

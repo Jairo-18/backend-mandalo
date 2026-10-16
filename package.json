@@ -19,9 +19,16 @@
     "migration:generate": "cross-env NODE_ENV=development npm run typeorm -- -d typeorm.config.ts migration:generate ./src/migrations/%npm_config_name%",
     "migration:create": "npm run typeorm -- migration:create ./src/migrations/%npm_config_name%",
     "migration:revert": "cross-env NODE_ENV=development npm run typeorm -- -d typeorm.config.ts migration:revert",
-    "migration:revert:prod": "cross-env NODE_ENV=production npm run typeorm -- -d typeorm.config.ts migration:revert"
+    "migration:revert:prod": "cross-env NODE_ENV=production npm run typeorm -- -d typeorm.config.ts migration:revert",
+    "proto:gen": "node scripts/proto-gen.js",
+    "start:grpc": "node dist/src/distributed/grpc/grpc.main",
+    "start:consumer": "node dist/src/distributed/kafka/consumer.main",
+    "kafka:simular": "node dist/src/distributed/kafka/simulate-producer.main",
+    "grpc:cliente": "node dist/src/distributed/grpc/grpc-client.main"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.6",
+    "@grpc/proto-loader": "^0.8.1",
     "@keyv/redis": "^5.1.6",
     "@nestjs-modules/mailer": "^2.3.7",
     "@nestjs/cache-manager": "^3.1.3",
@@ -29,6 +36,7 @@
     "@nestjs/config": "^4.0.1",
     "@nestjs/core": "^11.0.11",
     "@nestjs/jwt": "^11.0.0",
+    "@nestjs/microservices": "^11.1.27",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.20",
     "@nestjs/platform-socket.io": "^11.1.28",
@@ -53,6 +61,7 @@
     "googleapis": "^171.4.0",
     "helmet": "^8.0.0",
     "jose": "^6.2.12",
+    "kafkajs": "^2.2.4",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
     "passport": "^0.7.0",
@@ -82,6 +91,7 @@
     "source-map-support": "^0.5.21",
     "ts-loader": "^9.4.3",
     "ts-node": "^10.9.1",
+    "ts-proto": "^2.15.3",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.1.3"
   },

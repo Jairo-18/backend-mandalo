@@ -1,0 +1,16 @@
+{"level":"WARN","timestamp":"2026-10-16T19:18:15.407Z","logger":"kafkajs","message":"KafkaJS v2.0.0 switched default partitioner. To retain the same partitioning behavior as in previous versions, create the producer with the option \"createPartitioner: Partitioners.LegacyPartitioner\". See the migration guide at https://kafka.js.org/docs/migration-guide-v2.0.0#producer-new-default-partitioner for details. Silence this warning by setting the environment variable \"KAFKAJS_NO_PARTITIONER_WARNING=1\""}
+→ pedido.creado      #983900 [PEND] partición 1 offset 0
+→ pedido.actualizado #983900 [ACEP] partición 1 offset 1
+→ pedido.actualizado #983900 [PREP] partición 1 offset 2
+→ pedido.creado      #983901 [PEND] partición 0 offset 0
+→ pedido.creado      #983902 [PEND] partición 0 offset 1
+→ pedido.actualizado #983902 [ACEP] partición 0 offset 2
+→ pedido.actualizado #983902 [PREP] partición 0 offset 3
+→ pedido.creado      #983903 [PEND] partición 0 offset 4
+→ pedido.actualizado #983903 [ACEP] partición 0 offset 5
+→ pedido.actualizado #983903 [PREP] partición 0 offset 6
+→ pedido.creado      #983904 [PEND] partición 1 offset 3
+→ pedido.creado      #983905 [PEND] partición 1 offset 4
+→ pedido.actualizado #983905 [ACEP] partición 1 offset 5
+→ pedido.actualizado #983905 [PREP] partición 1 offset 6
+→ pedido.actualizado #983905 [RUTA] partición 1 offset 7

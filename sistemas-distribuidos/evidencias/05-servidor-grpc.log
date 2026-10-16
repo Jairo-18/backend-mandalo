@@ -1,0 +1,18 @@
+[32m[Nest] 80928  - [39m16/10/2026, 2:17:52 p. m. [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:17:52 p. m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPedidosGrpcModule dependencies initialized[39m[38;5;3m +6ms[39m
+(node:80928) TimeoutNegativeWarning: -1792178272203 is a negative number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[32m[Nest] 80928  - [39m16/10/2026, 2:17:55 p. m. [32m    LOG[39m [38;5;3m[PedidosFeed] [39m[32mEscuchando pedidos.eventos para los streams gRPC[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:17:55 p. m. [32m    LOG[39m [38;5;3m[NestMicroservice] [39m[32mNest microservice successfully started[39m[38;5;3m +31ms[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:17:55 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mServidor gRPC escuchando en 0.0.0.0:50051[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:08 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mSeguirPedido(todos) [server-streaming] abierto[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:11 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mObtenerPedido(149) [unary][39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:11 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mSeguirPedido(149) [server-streaming] abierto[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:11 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mObtenerPedido(149) [unary][39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:14 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mSeguirPedido(149) cerrado por el cliente[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:15 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mObtenerPedido(99999) [unary][39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:39 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mObtenerPedido(148) [unary][39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:40 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mSeguirPedido(148) [server-streaming] abierto[39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:40 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mObtenerPedido(148) [unary][39m
+[32m[Nest] 80928  - [39m16/10/2026, 2:18:43 p. m. [32m    LOG[39m [38;5;3m[PedidosGrpc] [39m[32mSeguirPedido(148) cerrado por el cliente[39m

@@ -3,3 +3,5 @@ allowBuilds:
   '@scarf/scarf': false
   # sharp necesita su postinstall (descarga los binarios nativos por plataforma)
   sharp: true
+  # su postinstall solo avisa de versiones; no hace falta
+  protobufjs: false

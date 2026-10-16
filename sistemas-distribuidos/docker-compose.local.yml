@@ -1,0 +1,10 @@
+# Solo para correr en un PC con Docker: publica los puertos en localhost.
+services:
+  kafka:
+    ports: ["9094:9094"]
+  kafka-ui:
+    ports: ["8080:8080"]
+  api:
+    ports: ["3000:3000"]
+  pedidos-grpc:
+    ports: ["50051:50051"]

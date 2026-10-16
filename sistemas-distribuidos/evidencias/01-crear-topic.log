@@ -1,0 +1,5 @@
+WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.
+Created topic pedidos.eventos.
+Topic: pedidos.eventos	TopicId: Mo_d_A6BQvy6vS8WogDbeA	PartitionCount: 2	ReplicationFactor: 1	Configs: segment.bytes=1073741824
+	Topic: pedidos.eventos	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: pedidos.eventos	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 

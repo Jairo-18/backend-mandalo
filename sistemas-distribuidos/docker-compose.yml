@@ -1,0 +1,139 @@
+# Sistemas Distribuidos — Mándalo (gRPC + Kafka) sobre la DB de DEV.
+#
+# Dokploy (ver DESPLIEGUE-DOKPLOY.md): app "Compose", rama `sistemas-distribuidos`,
+# compose path `./sistemas-distribuidos/docker-compose.yml`. Levanta Kafka,
+# Kafka UI, el servicio gRPC y los 2 consumers en `dokploy-network`; el API es
+# el back dev que ya existe (apidev), que los alcanza como `sd-kafka:9092` y
+# `sd-pedidos-grpc:50051`. Dominio solo para kafka-ui (puerto 8080).
+#
+# Local (con el API incluido, perfil "local"):
+#   docker network create dokploy-network
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml --profile local up --build
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: mandalo-sd:latest
+  restart: unless-stopped
+  networks: [default, dokploy-network]
+  environment: &app-env
+    NODE_ENV: production
+    KAFKA_BROKERS: sd-kafka:9092
+    DB_HOST: ${DB_HOST}
+    DB_PORT: ${DB_PORT}
+    DB_DATABASE: ${DB_DATABASE}
+    DB_USERNAME: ${DB_USERNAME}
+    DB_PASSWORD: ${DB_PASSWORD}
+    DB_SSL: ${DB_SSL:-false}
+
+services:
+  # --- Kafka: 1 broker en modo KRaft (sin ZooKeeper) ------------------------
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://sd-kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    # Nombre estable para el back dev (otra app de Dokploy) y para este compose.
+    networks:
+      default: { aliases: [sd-kafka] }
+      dokploy-network: { aliases: [sd-kafka] }
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # Crea el topic con 2 particiones (paso 27) y termina.
+  kafka-init:
+    image: apache/kafka:3.9.1
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server sd-kafka:9092 --create --if-not-exists \
+          --topic pedidos.eventos --partitions 2 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server sd-kafka:9092 --describe --topic pedidos.eventos
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    restart: unless-stopped
+    networks: [default, dokploy-network]
+    depends_on:
+      kafka: { condition: service_healthy }
+    environment:
+      KAFKA_CLUSTERS_0_NAME: mandalo
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: sd-kafka:9092
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USER:-admin}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD}
+
+  # --- API (solo local: en Dokploy el API es el back dev apidev) -------------
+  api:
+    <<: *app
+    profiles: ["local"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      pedidos-grpc: { condition: service_started }
+    env_file: .env
+    environment:
+      <<: *app-env
+      GRPC_PEDIDOS_URL: sd-pedidos-grpc:50051
+      SD_DEMO: "true"
+    # Sin migraciones: es la DB de dev compartida y la rama no trae ninguna.
+    command: ["pnpm", "run", "start:prod"]
+
+  # --- Servicio gRPC de pedidos (unary + server-streaming) ------------------
+  pedidos-grpc:
+    <<: *app
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    networks:
+      default: { aliases: [sd-pedidos-grpc] }
+      dokploy-network: { aliases: [sd-pedidos-grpc] }
+    environment:
+      <<: *app-env
+      GRPC_PORT: 50051
+    command: ["node", "dist/src/distributed/grpc/grpc.main"]
+
+  # --- 2 consumers en el MISMO grupo "notificaciones" (paso 30) --------------
+  consumer-a:
+    <<: *app
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    environment:
+      KAFKA_BROKERS: sd-kafka:9092
+      CONSUMER_NAME: consumer-A
+    command: ["node", "dist/src/distributed/kafka/consumer.main"]
+
+  consumer-b:
+    <<: *app
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    environment:
+      KAFKA_BROKERS: sd-kafka:9092
+      CONSUMER_NAME: consumer-B
+    command: ["node", "dist/src/distributed/kafka/consumer.main"]
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  kafka-data:

@@ -1,0 +1,18 @@
+2026-10-16T19:18:11.609Z [unary] ObtenerPedido(149) en 623 ms:
+{
+  id: 149,
+  estadoCodigo: 'ENTR',
+  estadoNombre: 'Entregado',
+  negocio: 'Comidas Rapidas 24 H',
+  municipio: 'Mocoa',
+  subtotal: 8000,
+  domicilio: 6000,
+  total: 14800,
+  metodoPago: 'Efectivo',
+  tieneRepartidor: true,
+  creadoEn: '2026-10-09T22:14:00.459Z',
+  actualizadoEn: '2026-10-09T22:17:23.149Z'
+}
+2026-10-16T19:18:11.609Z [stream] SeguirPedido(149) — Ctrl+C para salir
+2026-10-16T19:18:11.726Z [stream] pedido.snapshot #149 [ENTR] Comidas Rapidas 24 H (snapshot DB)
+El pedido #99999 no existe

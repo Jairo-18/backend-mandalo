@@ -16,6 +16,7 @@ import { OrganizationalRepository } from '../shared/repositories/organizational.
 import { InvoiceRepository } from '../shared/repositories/invoice.repository';
 import { RoleTypeCode } from '../shared/roles/roleTypeCode.enum';
 import { StateTypeCode } from '../shared/constants/stateTypeCode.enum';
+import { OrderEventsPublisher } from '../distributed/kafka/order-events.publisher';
 
 /** Autorización cacheada del tracking (evita ir a la DB en cada ping GPS). */
 type TrackAuth = {
@@ -56,6 +57,7 @@ export class InvoiceGateway
     private readonly _userRepository: UserRepository,
     private readonly _organizationalRepository: OrganizationalRepository,
     private readonly _invoiceRepository: InvoiceRepository,
+    private readonly _orderEvents: OrderEventsPublisher,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -199,6 +201,9 @@ export class InvoiceGateway
 
   emitToOrg(organizationalId: number, event: string, payload: unknown): void {
     this.server?.to(`org:${organizationalId}`).emit(event, payload);
+    // Todo cambio de un pedido le llega al negocio por aquí: se publica
+    // también en Kafka (no-op sin KAFKA_BROKERS).
+    this._orderEvents.fromSocket(event, payload);
   }
 
   emitToDeliveries(event: string, payload: unknown): void {

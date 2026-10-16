@@ -1,0 +1,229 @@
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [NestFactory] Starting Nest application...
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] TypeOrmModule dependencies initialized +38ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] MailerModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] SharedModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] PassportModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ClientsModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ThrottlerModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] DiscoveryModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [GoogleDriveService] Google Drive OAuth2 client initialized
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] CacheModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ServeStaticModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] ScheduleModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] LocalStorageModule dependencies initialized +21ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] MailerCoreModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] DistributedModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:37 p. m.     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] TypeOrmCoreModule dependencies initialized +829ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] TypeOrmModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] SharedModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] CronJobModule dependencies initialized +2ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] CatalogModule dependencies initialized +4ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] BackupModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] TagModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] CategoryTypeModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] SettlementModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] DeliverySettlementModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] AppSettingsModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] UserAddressModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] DashboardModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] MunicipalityPricingModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] ChatModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] DeliveryAccidentModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] InvoiceModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] ProductModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] ExploreModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] UserModule dependencies initialized +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] OrganizationalModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [WebSocketsController] InvoiceGateway subscribed to the "delivery:position" message +94ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [WebSocketsController] InvoiceGateway subscribed to the "app:state" message +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] AppController {/}: +3ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/health, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] AuthController {/auth}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/sign-in, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/register-quick, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/google, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/apple, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/link-apple, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/unlink-apple, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/link-google, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/unlink-google, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/refresh-token, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/forgot-password, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/reset-password, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/auth/sign-out, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] UserController {/user}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/verify-email, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/request-deletion, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/confirm-deletion, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/register/client, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/register/delivery, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/business-lead, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/resend-verification, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/create, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/bulk-invite/preview, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/verify-email/preview, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/confirm-deletion/preview, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/bulk-invite, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/password, PATCH} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/accept-terms, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/become-delivery, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/resend-documents, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/avatar, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/avatar, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/push-token, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me/push-token, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/me, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/:id, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/:id/avatar, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user/:id/avatar, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] AppSettingsController {/app-settings}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/app-settings, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/app-settings, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] CatalogController {/catalog}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/catalog/departments, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/catalog/municipalities, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/catalog/identification-types, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] CategoryTypeController {/category-type}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/category-type/create, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/category-type/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/category-type/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/category-type/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/category-type/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] TagController {/tag}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/tag/create, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/tag/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/tag/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/tag/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/tag/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] OrganizationalController {/organizational}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/create, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine/logo, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine/payment-qr, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine/logo, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/mine/payment-qr, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/resolve-maps-url, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/search-address, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/reverse-geocode, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id/logo, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id/logo, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id/payment-qr, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/organizational/:id/payment-qr, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] ProductController {/product}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/create, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/:id/image, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/product/:id/image, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] InvoiceController {/invoice}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/create, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/delivery-fee, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/service-fee-summary, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/available, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/take, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/arrive, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/retry-after-timeout, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/report-failure, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/payment-proof, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/request-payment, POST} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/reject-payment, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id/state, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/invoice/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] UserAddressController {/user-address}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address/create, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address/:id, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address/:id/photo, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address/:id/photo, DELETE} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/user-address/:id, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] ExploreController {/explore}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/filters, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/products, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/organizationals, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/organizationals/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/organizationals/:id/products, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/explore/delivery-estimate, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] ChatController {/chat}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/chat/threads, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/chat/unread-count, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/chat/:invoiceId, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/chat/:invoiceId/messages, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/chat/:invoiceId/read, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] SettlementController {/settlement}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/settlement/periods, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/settlement/mine, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/settlement/mark, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] DeliverySettlementController {/delivery-settlement}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-settlement/periods, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-settlement/mine, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-settlement/mark, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] DeliveryAccidentController {/delivery-accident}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-accident/report, POST} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-accident/paginated, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-accident/unreviewed-count, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-accident/:id, GET} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/delivery-accident/:id/review, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] BackupController {/backup}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/backup/generate, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/backup/test-upload, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] DashboardController {/dashboard}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/dashboard/admin, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/dashboard/business, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] MunicipalityPricingController {/municipality-pricing}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/municipality-pricing, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/municipality-pricing/general, PATCH} route +1ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/municipality-pricing/municipality/:municipalityId, PATCH} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/municipality-pricing/municipality/:municipalityId, DELETE} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RoutesResolver] DemoController {/sd}: +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/sd, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/sd/app.js, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/sd/api/pedidos/:id, GET} route +0ms
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [RouterExplorer] Mapped {/sd/api/seguir/:id, GET} route +0ms
+(node:74828) TimeoutNegativeWarning: -1792178318540 is a negative number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"WARN","timestamp":"2026-10-16T19:18:38.547Z","logger":"kafkajs","message":"KafkaJS v2.0.0 switched default partitioner. To retain the same partitioning behavior as in previous versions, create the producer with the option \"createPartitioner: Partitioners.LegacyPartitioner\". See the migration guide at https://kafka.js.org/docs/migration-guide-v2.0.0#producer-new-default-partitioner for details. Silence this warning by setting the environment variable \"KAFKAJS_NO_PARTITIONER_WARNING=1\""}
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [KafkaProducer] Conectado a localhost:9092 → topic pedidos.eventos
+[Nest] 74828  - 16/10/2026, 2:18:38 p. m.     LOG [NestApplication] Nest application successfully started +77ms
+App corriendo en el puerto 3000 [development]

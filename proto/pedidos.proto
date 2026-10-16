@@ -1,0 +1,50 @@
+// Contrato gRPC del servicio de pedidos de Mándalo (Sistemas Distribuidos).
+// Los stubs de TypeScript se generan con protoc + ts-proto:
+//   pnpm proto:gen   →   src/distributed/generated/pedidos.ts
+syntax = "proto3";
+
+package mandalo.pedidos;
+
+service PedidosService {
+  // Unary: resumen de un pedido leído de la base de datos.
+  rpc ObtenerPedido (ObtenerPedidoRequest) returns (PedidoResumen);
+
+  // Server-streaming: primero manda el estado actual del pedido y luego cada
+  // cambio de estado en vivo (los cambios llegan al servicio por Kafka).
+  // pedido_id = 0 → sigue TODOS los pedidos.
+  rpc SeguirPedido (SeguirPedidoRequest) returns (stream EventoPedido);
+}
+
+message ObtenerPedidoRequest {
+  int32 pedido_id = 1;
+}
+
+message SeguirPedidoRequest {
+  int32 pedido_id = 1;
+}
+
+message PedidoResumen {
+  int32 id = 1;
+  string estado_codigo = 2;   // PEND, ACEP, PREP, RUTA, FALL, ENTR, CANC
+  string estado_nombre = 3;
+  string negocio = 4;
+  string municipio = 5;
+  double subtotal = 6;
+  double domicilio = 7;
+  double total = 8;
+  string metodo_pago = 9;
+  bool tiene_repartidor = 10;
+  string creado_en = 11;      // ISO-8601
+  string actualizado_en = 12; // ISO-8601
+}
+
+message EventoPedido {
+  string tipo = 1;            // pedido.creado | pedido.actualizado | pedido.eliminado | pedido.snapshot
+  int32 pedido_id = 2;
+  string estado_codigo = 3;
+  string negocio = 4;
+  double total = 5;
+  string ocurrido_en = 6;     // ISO-8601
+  int32 particion = 7;        // partición de Kafka de donde salió (-1 si es snapshot)
+  string offset = 8;          // offset de Kafka ("" si es snapshot)
+}

@@ -1,0 +1,14 @@
+→ pedido.creado      #922200 [PEND] partición 0 offset 7
+→ pedido.actualizado #922200 [ACEP] partición 0 offset 8
+→ pedido.actualizado #922200 [PREP] partición 0 offset 9
+→ pedido.actualizado #922200 [RUTA] partición 0 offset 10
+→ pedido.actualizado #922200 [ENTR] partición 0 offset 11
+→ pedido.creado      #922201 [PEND] partición 0 offset 12
+→ pedido.actualizado #922201 [ACEP] partición 0 offset 13
+→ pedido.actualizado #922201 [PREP] partición 0 offset 14
+→ pedido.actualizado #922201 [RUTA] partición 0 offset 15
+→ pedido.creado      #922202 [PEND] partición 0 offset 16
+→ pedido.actualizado #922202 [ACEP] partición 0 offset 17
+→ pedido.actualizado #922202 [PREP] partición 0 offset 18
+→ pedido.actualizado #922202 [RUTA] partición 0 offset 19
+→ pedido.actualizado #922202 [ENTR] partición 0 offset 20

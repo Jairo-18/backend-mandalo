@@ -1,0 +1,14 @@
+(node:40828) TimeoutNegativeWarning: -1792178228776 is a negative number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"ERROR","timestamp":"2026-10-16T19:17:08.791Z","logger":"kafkajs","message":"[Connection] Response CreateTopics(key: 19, version: 3)","broker":"localhost:9092","clientId":"notificaciones-consumer-B","error":"Topic creation errors","correlationId":2,"size":72}
+2026-10-16T19:17:08.799Z [consumer-B] escuchando pedidos.eventos en el grupo "notificaciones"
+2026-10-16T19:17:15.929Z [consumer-B] unido al grupo "notificaciones" (líder: false) → particiones asignadas: [0]
+2026-10-16T19:18:16.385Z [consumer-B] partición=0 offset=0 key=983901 | 🛍️  Nuevo pedido #983901 en "Pizzería Villagarzón" por $53.000
+2026-10-16T19:18:16.682Z [consumer-B] partición=0 offset=1 key=983902 | 🛍️  Nuevo pedido #983902 en "Droguería Central" por $67.000
+2026-10-16T19:18:16.987Z [consumer-B] partición=0 offset=2 key=983902 | 📦 Pedido #983902 → Aceptado
+2026-10-16T19:18:17.301Z [consumer-B] partición=0 offset=3 key=983902 | 📦 Pedido #983902 → En preparación
+2026-10-16T19:18:17.614Z [consumer-B] partición=0 offset=4 key=983903 | 🛍️  Nuevo pedido #983903 en "Comidas Rapidas 24 H" por $24.000
+2026-10-16T19:18:17.614Z [consumer-B] resumen: 5 eventos | {"PEND":3,"ACEP":1,"PREP":1}
+2026-10-16T19:18:17.926Z [consumer-B] partición=0 offset=5 key=983903 | 📦 Pedido #983903 → Aceptado
+2026-10-16T19:18:18.236Z [consumer-B] partición=0 offset=6 key=983903 | 📦 Pedido #983903 → En preparación

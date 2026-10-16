@@ -33,6 +33,7 @@ import { BackupModule } from './backup/backup.module';
 import { CronJobModule } from './cronJobs/cron.job.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MunicipalityPricingModule } from './municipalityPricing/municipalityPricing.module';
+import { DistributedModule } from './distributed/distributed.module';
 
 @Module({
   imports: [
@@ -104,6 +105,8 @@ import { MunicipalityPricingModule } from './municipalityPricing/municipalityPri
     CronJobModule,
     DashboardModule,
     MunicipalityPricingModule,
+    // Sistemas Distribuidos: producer Kafka + cliente gRPC + demo /sd (apagado sin env).
+    DistributedModule,
   ],
   controllers: [AppController],
   providers: [

@@ -133,6 +133,40 @@ export class ProductController {
     };
   }
 
+  /**
+   * Video del producto (multipart, campo `file`): máx. 10 s; el servidor lo
+   * deja 4:3 horizontal (960×720). 100 MB de tope de subida (un 10 s en 4K del
+   * celular ronda los 60 MB).
+   */
+  @Post(':id/video')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }),
+  )
+  async setVideo(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._productUC.setVideo(user, id, file);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Video guardado exitosamente',
+      data,
+    };
+  }
+
+  @Delete(':id/video')
+  async removeVideo(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    await this._productUC.removeVideo(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Video eliminado exitosamente',
+    };
+  }
+
   /** Quita una o varias fotos del producto (query `urls` separadas por coma). */
   @Delete(':id/image')
   @RemoveProductImageDocs()

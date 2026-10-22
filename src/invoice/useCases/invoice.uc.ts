@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InvoiceService } from '../services/invoice.service';
 import { User } from '../../shared/entities/user.entity';
 import {
+  CreateErrandDto,
   CreateInvoiceDto,
+  ErrandFeeParamsDto,
   DeliveryFeePreviewParamsDto,
   PaginatedInvoicesParamsDto,
   UpdateInvoiceStateDto,
@@ -22,6 +24,18 @@ export class InvoiceUC {
 
   create(user: User, dto: CreateInvoiceDto) {
     return this._invoiceService.create(user, dto);
+  }
+
+  previewErrandFee(user: User, params: ErrandFeeParamsDto) {
+    return this._invoiceService.previewErrandFee(user, params);
+  }
+
+  createErrand(user: User, dto: CreateErrandDto) {
+    return this._invoiceService.createErrand(user, dto);
+  }
+
+  releaseErrand(user: User, id: number) {
+    return this._invoiceService.releaseErrand(user, id);
   }
 
   findOne(user: User, id: number) {

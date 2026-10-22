@@ -47,6 +47,18 @@ import { InvoiceRepository } from './repositories/invoice.repository';
 import { InvoiceDetailRepository } from './repositories/invoiceDetail.repository';
 import { UserPushTokenRepository } from './repositories/userPushToken.repository';
 import { ChatMessageRepository } from './repositories/chatMessage.repository';
+import { Review } from './entities/review.entity';
+import { ReviewRepository } from './repositories/review.repository';
+import { Promotion, PromotionProduct } from './entities/promotion.entity';
+import { FavoriteBusiness, FavoriteProduct } from './entities/favorite.entity';
+import {
+  FavoriteBusinessRepository,
+  FavoriteProductRepository,
+} from './repositories/favorite.repository';
+import {
+  PromotionProductRepository,
+  PromotionRepository,
+} from './repositories/promotion.repository';
 import { BusinessSettlementRepository } from './repositories/businessSettlement.repository';
 import { DeliverySettlementRepository } from './repositories/deliverySettlement.repository';
 import { AppSettings } from './entities/appSettings.entity';
@@ -124,6 +136,11 @@ export class SharedModule {
           AppSettings,
           DeliveryAccident,
           MunicipalityPricing,
+          Review,
+          Promotion,
+          PromotionProduct,
+          FavoriteBusiness,
+          FavoriteProduct,
         ]),
 
         PassportModule,
@@ -193,6 +210,11 @@ export class SharedModule {
         AppSettingsRepository,
         DeliveryAccidentRepository,
         MunicipalityPricingRepository,
+        ReviewRepository,
+        PromotionRepository,
+        PromotionProductRepository,
+        FavoriteBusinessRepository,
+        FavoriteProductRepository,
       ],
       exports: [
         JwtModule,
@@ -226,6 +248,11 @@ export class SharedModule {
         AppSettingsRepository,
         DeliveryAccidentRepository,
         MunicipalityPricingRepository,
+        ReviewRepository,
+        PromotionRepository,
+        PromotionProductRepository,
+        FavoriteBusinessRepository,
+        FavoriteProductRepository,
       ],
     };
   }

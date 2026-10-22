@@ -37,6 +37,7 @@ import {
   RequestAccountDeletionDto,
   ResendDeliveryDocumentsDto,
   ResendVerificationDto,
+  UpdateMyPaymentInfoDto,
   UpdateMyProfileDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
@@ -520,6 +521,36 @@ export class UserController {
     };
   }
 
+  /** "Mis datos de pago" del repartidor (Nequi): titular, número y llave. */
+  @Patch('me/payment-info')
+  @UseGuards(AuthGuard())
+  async updateMyPaymentInfo(
+    @GetUser() user: User,
+    @Body() body: UpdateMyPaymentInfoDto,
+  ) {
+    const data = await this._userUC.updateMyPaymentInfo(user.id, body);
+    return { statusCode: HttpStatus.OK, message: 'Datos de pago guardados', data };
+  }
+
+  /** QR de Nequi del repartidor (multipart, campo `file`). */
+  @Post('me/nequi-qr')
+  @UseGuards(AuthGuard())
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadMyNequiQr(
+    @GetUser() user: User,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const data = await this._userUC.uploadMyNequiQr(user.id, file);
+    return { statusCode: HttpStatus.OK, message: 'QR de Nequi actualizado', data };
+  }
+
+  @Delete('me/nequi-qr')
+  @UseGuards(AuthGuard())
+  async removeMyNequiQr(@GetUser() user: User) {
+    await this._userUC.removeMyNequiQr(user.id);
+    return { statusCode: HttpStatus.OK, message: 'QR de Nequi eliminado' };
+  }
+
   /** Quita la propia foto de perfil (opcional, sin reemplazo). */
   @Delete('me/avatar')
   @UseGuards(AuthGuard())
@@ -565,7 +596,28 @@ export class UserController {
   }
 
   /**
-   * "Eliminar mi cuenta" (self-service, exigido por Google Play): sin
+   * "Eliminar mi cuenta" desde la app (con sesión): NO borra nada todavía —
+   * manda al correo de la cuenta el mismo enlace de confirmación de la
+   * página web (`confirm-deletion`, 30 min, un solo uso). Al abrirlo se
+   * ejecuta `performAccountDeletion` (borrado o anonimización contable).
+   */
+  @Post('me/request-deletion')
+  @UseGuards(AuthGuard())
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async requestMyDeletion(
+    @GetUser() user: User,
+  ): Promise<UpdateRecordResponseDto> {
+    await this._userUC.requestDeletionByEmail(user.email);
+    return {
+      statusCode: HttpStatus.OK,
+      message: `Te enviamos un correo a ${user.email} para confirmar la eliminación de tu cuenta.`,
+    };
+  }
+
+  /**
+   * Eliminación INMEDIATA (sin correo): la usan las versiones de la app
+   * publicadas antes del flujo con confirmación por correo — no quitar
+   * mientras sigan instaladas. Sin
    * historial se borra al instante; con historial la cuenta queda
    * bloqueada (baneada) y marcada para limpieza manual — ver
    * `UserService.requestSelfDeletion`.

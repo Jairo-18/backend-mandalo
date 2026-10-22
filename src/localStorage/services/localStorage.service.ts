@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
+import { processProductVideo } from './video-processing';
 
 /** Subcarpetas lógicas de /uploads (una por tipo de imagen). */
 export type UploadFolder =
@@ -12,7 +13,8 @@ export type UploadFolder =
   | 'products'
   | 'payments'
   | 'delivery-failures'
-  | 'addresses';
+  | 'addresses'
+  | 'promotions';
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const DOCUMENT_MIME_TYPES = [...IMAGE_MIME_TYPES, 'application/pdf'];
@@ -138,6 +140,71 @@ export class LocalStorageService {
     const imageUrl = `${this.baseUrl}/uploads/${publicId}`;
 
     return { imageUrl, publicId };
+  }
+
+  /**
+   * Banner de publicidad: recorte 16:9 AL CENTRO (1280×720 webp), sea cual
+   * sea la foto que subió el negocio — el editor de fotos de la app solo
+   * recorta cuadrado, así que el encuadre del banner lo pone el servidor.
+   */
+  async saveBanner(
+    file: Express.Multer.File,
+    folder: UploadFolder,
+  ): Promise<{ imageUrl: string; publicId: string }> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Archivo no válido o vacío');
+    }
+    if (!IMAGE_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Tipo de archivo no permitido. Solo se aceptan: jpg, png, webp, gif',
+      );
+    }
+    const targetDir = path.join(this.uploadsDir, folder);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const filename = `${uuidv4()}.webp`;
+    await sharp(file.buffer)
+      .rotate() // respeta la orientación EXIF de la foto del celular
+      .resize(1280, 720, { fit: 'cover', position: 'centre' })
+      .webp({ quality: 82, effort: 6 })
+      .toFile(path.join(targetDir, filename));
+    const publicId = `${folder}/${filename}`;
+    return { imageUrl: `${this.baseUrl}/uploads/${publicId}`, publicId };
+  }
+
+  /**
+   * Video de producto: lo procesa (4:3 horizontal 960×720, ≤ 10 s, ver
+   * `video-processing.ts`) y guarda el mp4 + su miniatura webp.
+   */
+  async saveProductVideo(
+    file: Express.Multer.File,
+  ): Promise<{ videoUrl: string; thumbnailUrl: string }> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Archivo no válido o vacío');
+    }
+    if (!file.mimetype?.startsWith('video/')) {
+      throw new BadRequestException('Tipo de archivo no permitido. Sube un video.');
+    }
+
+    const processed = await processProductVideo(file.buffer);
+    try {
+      const targetDir = path.join(this.uploadsDir, 'products');
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const id = uuidv4();
+      await fs.promises.copyFile(processed.videoPath, path.join(targetDir, `${id}.mp4`));
+      await sharp(processed.thumbnailPath)
+        .webp({ quality: 80 })
+        .toFile(path.join(targetDir, `${id}-thumb.webp`));
+      return {
+        videoUrl: `${this.baseUrl}/uploads/products/${id}.mp4`,
+        thumbnailUrl: `${this.baseUrl}/uploads/products/${id}-thumb.webp`,
+      };
+    } finally {
+      await processed.cleanup();
+    }
   }
 
   /** Elimina un archivo del disco usando su publicId (p. ej. `users/uuid.webp`). */

@@ -9,6 +9,7 @@ import {
   CreateUserDto,
   RegisterUserDto,
   ResendDeliveryDocumentsDto,
+  UpdateMyPaymentInfoDto,
   UpdateMyProfileDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
@@ -117,5 +118,17 @@ export class UserUC {
 
   removeAvatar(id: string, admin?: User) {
     return this._userService.removeAvatar(id, admin);
+  }
+
+  updateMyPaymentInfo(id: string, dto: UpdateMyPaymentInfoDto) {
+    return this._userService.updateMyPaymentInfo(id, dto);
+  }
+
+  uploadMyNequiQr(id: string, file: Express.Multer.File) {
+    return this._userService.uploadMyNequiQr(id, file);
+  }
+
+  removeMyNequiQr(id: string) {
+    return this._userService.removeMyNequiQr(id);
   }
 }

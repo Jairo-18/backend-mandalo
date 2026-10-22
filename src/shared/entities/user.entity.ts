@@ -13,6 +13,12 @@ import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
 import { IdentificationType } from './identificationType.entity';
 
+// Postgres devuelve los numeric como string; esto los convierte a number.
+const RATING_TRANSFORMER = {
+  to: (value?: number | null) => value,
+  from: (value: string | null) => (value === null ? null : parseFloat(value)),
+};
+
 @Entity({ name: 'user' })
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -133,6 +139,20 @@ export class User {
   @Column('varchar', { length: 80, nullable: true })
   arlIndividualNumber?: string | null;
 
+  // ---- Datos de pago del REPARTIDOR ("Mi cuenta → Mis datos de pago") ----
+  // El cliente de un mandado pagado por Nequi le transfiere directo a él.
+  @Column('varchar', { length: 120, nullable: true })
+  paymentHolderName?: string | null;
+
+  @Column('varchar', { length: 30, nullable: true })
+  nequiNumber?: string | null;
+
+  @Column('varchar', { length: 80, nullable: true })
+  nequiKey?: string | null;
+
+  @Column('varchar', { length: 500, nullable: true })
+  nequiQrUrl?: string | null;
+
   // Aceptación de Términos y Condiciones + Política de Tratamiento de Datos
   // (Habeas Data). `termsVersion` guarda QUÉ versión aceptó (permite pedir
   // re-aceptación si el texto cambia materialmente más adelante).
@@ -176,6 +196,19 @@ export class User {
 
   @Column('timestamp', { nullable: true })
   deletionRequestTokenExpiry?: Date;
+
+  // Calificación recibida (reseñas, migración AddReviews): promedio 0.5–5 y
+  // cantidad. La mantiene un trigger de la DB, no el código.
+  @Column('numeric', {
+    precision: 3,
+    scale: 2,
+    nullable: true,
+    transformer: RATING_TRANSFORMER,
+  })
+  ratingAverage?: number | null;
+
+  @Column('int', { default: 0 })
+  ratingCount: number;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt?: Date;

@@ -25,6 +25,9 @@ import { UserAddressModule } from './userAddress/userAddress.module';
 import { ExploreModule } from './explore/explore.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ChatModule } from './chat/chat.module';
+import { ReviewModule } from './review/review.module';
+import { PromotionModule } from './promotion/promotion.module';
+import { FavoriteModule } from './favorite/favorite.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { DeliverySettlementModule } from './deliverySettlement/deliverySettlement.module';
 import { DeliveryAccidentModule } from './deliveryAccident/deliveryAccident.module';
@@ -96,6 +99,9 @@ import { MunicipalityPricingModule } from './municipalityPricing/municipalityPri
     ExploreModule,
     InvoiceModule,
     ChatModule,
+    ReviewModule,
+    PromotionModule,
+    FavoriteModule,
     SettlementModule,
     DeliverySettlementModule,
     DeliveryAccidentModule,

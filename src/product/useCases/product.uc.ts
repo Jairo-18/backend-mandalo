@@ -38,4 +38,12 @@ export class ProductUC {
   removeImages(user: User, id: number, urls: string[]) {
     return this._productService.removeImages(user, id, urls);
   }
+
+  setVideo(user: User, id: number, file: Express.Multer.File) {
+    return this._productService.setVideo(user, id, file);
+  }
+
+  removeVideo(user: User, id: number) {
+    return this._productService.removeVideo(user, id);
+  }
 }

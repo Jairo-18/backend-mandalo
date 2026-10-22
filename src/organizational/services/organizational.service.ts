@@ -34,6 +34,11 @@ import {
   PaginatedOrganizationalsParamsDto,
   UpdateOrganizationalDto,
 } from '../dtos/organizational.dto';
+import {
+  fieldBadRequest,
+  fieldConflict,
+} from '../../shared/utils/validation-errors.util';
+import { identificationError } from '../../shared/utils/identification.util';
 
 /** Relaciones que se cargan al devolver un negocio (listado y detalle). */
 /** Banco del QR de pago (`?bank=` en los endpoints payment-qr). */
@@ -79,6 +84,10 @@ export class OrganizationalService {
     if (dto.identificationNumber) {
       await this.assertIdentificationAvailable(dto.identificationNumber);
     }
+    await this.assertValidIdentification(
+      dto.identificationTypeId,
+      dto.identificationNumber,
+    );
 
     const { tagIds, accountEmail, accountPassword, ...data } = dto;
 
@@ -208,7 +217,10 @@ export class OrganizationalService {
       ])
       .skip(skip)
       .take(perPage)
-      .orderBy('organizational.legalName', params.order ?? 'ASC');
+      // Más recientes primero (los recién creados arriba); el id desempata
+      // los creados en el mismo instante (p. ej. por un script).
+      .orderBy('organizational.createdAt', params.order ?? 'DESC')
+      .addOrderBy('organizational.id', params.order ?? 'DESC');
     applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(admin));
 
     if (params.search) {
@@ -216,7 +228,9 @@ export class OrganizationalService {
       query.andWhere(
         `(organizational.legalName ILIKE :search
           OR organizational.tradeName ILIKE :search
-          OR organizational.identificationNumber ILIKE :search)`,
+          OR organizational.identificationNumber ILIKE :search
+          OR legalPerson.fullName ILIKE :search
+          OR legalPerson.identificationNumber ILIKE :search)`,
         { search },
       );
     }
@@ -227,9 +241,22 @@ export class OrganizationalService {
         legalName: `%${params.legalName.trim()}%`,
       });
     }
+    if (params.businessName) {
+      query.andWhere(
+        '(organizational.tradeName ILIKE :businessName OR organizational.legalName ILIKE :businessName)',
+        { businessName: `%${params.businessName.trim()}%` },
+      );
+    }
+    if (params.legalPersonName) {
+      query.andWhere('legalPerson.fullName ILIKE :legalPersonName', {
+        legalPersonName: `%${params.legalPersonName.trim()}%`,
+      });
+    }
+    // NIT del negocio o identificación de su representante legal.
     if (params.identificationNumber) {
       query.andWhere(
-        'organizational.identificationNumber ILIKE :identificationNumber',
+        `(organizational.identificationNumber ILIKE :identificationNumber
+          OR legalPerson.identificationNumber ILIKE :identificationNumber)`,
         { identificationNumber: `%${params.identificationNumber.trim()}%` },
       );
     }
@@ -332,6 +359,15 @@ export class OrganizationalService {
       dto.identificationNumber !== organizational.identificationNumber
     ) {
       await this.assertIdentificationAvailable(dto.identificationNumber);
+    }
+    if (
+      dto.identificationNumber !== undefined ||
+      dto.identificationTypeId !== undefined
+    ) {
+      await this.assertValidIdentification(
+        dto.identificationTypeId ?? organizational.identificationTypeId,
+        dto.identificationNumber ?? organizational.identificationNumber,
+      );
     }
 
     // accountEmail/accountPassword solo aplican al crear; en edición se ignoran.
@@ -523,12 +559,30 @@ export class OrganizationalService {
       where: { identificationNumber },
     });
     if (exists) {
-      throw new ConflictException(
+      throw fieldConflict(
+        'identificationNumber',
         'Ya existe un negocio con ese número de identificación',
       );
     }
   }
 
+
+  /**
+   * Número de identificación válido para su tipo (CC/TI solo dígitos; NIT
+   * con DV opcional comprobado — ver `identification.util.ts`). Sin tipo o
+   * sin número no se valida (las cuentas ADM… de los admins no tienen tipo).
+   */
+  private async assertValidIdentification(
+    identificationTypeId?: number | null,
+    identificationNumber?: string | null,
+  ): Promise<void> {
+    if (!identificationTypeId || !identificationNumber) return;
+    const type = await this._identificationTypeRepository.findOne({
+      where: { id: identificationTypeId },
+    });
+    const error = identificationError(type?.code, identificationNumber);
+    if (error) throw fieldBadRequest('identificationNumber', error);
+  }
   /** Valida que las FKs enviadas existan (mismos mensajes que el registro de usuario). */
   private async assertRelationsExist(
     dto: CreateOrganizationalDto | UpdateOrganizationalDto,

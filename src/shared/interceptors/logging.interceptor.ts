@@ -44,6 +44,11 @@ export class LoggingInterceptor implements NestInterceptor {
     if (sanitizedBody.newPassword) sanitizedBody.newPassword = '***';
     if (sanitizedBody.confirmNewPassword)
       sanitizedBody.confirmNewPassword = '***';
+    // Tokens: con el refreshToken del log se puede abrir la sesión del usuario.
+    if (sanitizedBody.refreshToken) sanitizedBody.refreshToken = '***';
+    if (sanitizedBody.accessToken) sanitizedBody.accessToken = '***';
+    if (sanitizedBody.idToken) sanitizedBody.idToken = '***';
+    if (sanitizedBody.identityToken) sanitizedBody.identityToken = '***';
     return sanitizedBody;
   }
 }

@@ -62,6 +62,17 @@ export class DeliverySettlement {
   @Column('numeric', { precision: 12, scale: 2, transformer: numericTransformer })
   riderCut: number;
 
+  // Lo que el repartidor YA cobró directo al cliente en mandados (tarifa +
+  // recargos): se descuenta de `riderCut` — neto = riderCut - collectedTotal
+  // (negativo = el repartidor le debe a Mándalo su comisión).
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  collectedTotal: number;
+
   @Column('boolean', { default: false })
   isPaid: boolean;
 

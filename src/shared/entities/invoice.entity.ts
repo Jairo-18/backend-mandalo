@@ -13,6 +13,13 @@ import { Organizational } from './organizational.entity';
 import { StateType } from './stateType.entity';
 import { PaidType } from './paidType.entity';
 import { InvoiceDetail } from './invoiceDetail.entity';
+import { Municipality } from './municipality.entity';
+
+/** Pedido a un negocio (lo de siempre) o mandado (sin negocio). */
+export enum InvoiceType {
+  ORDER = 'ORDER',
+  ERRAND = 'ERRAND',
+}
 
 // Postgres devuelve los numeric como string; esto los convierte a number.
 const numericTransformer = {
@@ -40,12 +47,51 @@ export class Invoice {
   @JoinColumn({ name: 'userId' })
   user?: User;
 
-  @Column('int')
-  organizationalId: number;
+  /** Pedido a un negocio o mandado (ver migración AddErrands). */
+  @Column('varchar', { length: 10, default: InvoiceType.ORDER })
+  type: InvoiceType;
 
-  @ManyToOne(() => Organizational, { onDelete: 'CASCADE' })
+  // NULL solo en los mandados (no hay negocio de por medio).
+  @Column('int', { nullable: true })
+  organizationalId: number | null;
+
+  @ManyToOne(() => Organizational, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'organizationalId' })
-  organizational?: Organizational;
+  organizational?: Organizational | null;
+
+  // ---- Mandados ----
+  // Municipio del mandado (el del cliente): tarifa y alcance del admin
+  // regional. En los pedidos esto sale del negocio.
+  @Column('int', { nullable: true })
+  municipalityId?: number | null;
+
+  @ManyToOne(() => Municipality, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'municipalityId' })
+  municipality?: Municipality | null;
+
+  // Dónde recoger (opcional: "compra en cualquier droguería").
+  @Column('varchar', { length: 255, nullable: true })
+  pickupAddress?: string | null;
+
+  @Column('double precision', { nullable: true })
+  pickupLatitude?: number | null;
+
+  @Column('double precision', { nullable: true })
+  pickupLongitude?: number | null;
+
+  // Qué debe hacer el repartidor ("Farmacia La Colonial, comprar acetaminofén").
+  @Column('varchar', { length: 500, nullable: true })
+  errandDescription?: string | null;
+
+  // Valor estimado de la compra que adelanta el repartidor (0 = sin compra);
+  // el cliente se lo devuelve al recibir. NO es ingreso de nadie.
+  @Column('numeric', {
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  errandPurchaseAmount: number;
 
   // Repartidor que TOMÓ el pedido (null mientras esté disponible)
   @Column('uuid', { nullable: true })

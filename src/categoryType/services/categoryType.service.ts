@@ -13,6 +13,7 @@ import {
   PaginatedCategoryTypesParamsDto,
   UpdateCategoryTypeDto,
 } from '../dtos/categoryType.dto';
+import { fieldConflict } from '../../shared/utils/validation-errors.util';
 
 @Injectable()
 export class CategoryTypeService {
@@ -104,7 +105,7 @@ export class CategoryTypeService {
       where: { code },
     });
     if (exists) {
-      throw new ConflictException('El código de la categoría ya está en uso');
+      throw fieldConflict('code', 'El código de la categoría ya está en uso');
     }
   }
 
@@ -121,7 +122,7 @@ export class CategoryTypeService {
     }
     const exists = await query.getOne();
     if (exists) {
-      throw new ConflictException('Ya existe una categoría con ese nombre');
+      throw fieldConflict('name', 'Ya existe una categoría con ese nombre');
     }
   }
 }

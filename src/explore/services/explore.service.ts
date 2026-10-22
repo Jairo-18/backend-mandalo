@@ -36,7 +36,61 @@ export type DeliveryEstimate = {
 };
 
 /** Negocio público + bandera calculada de apertura (horario Colombia). */
-type PublicOrganizational = Partial<Organizational> & { isOpen: boolean };
+export type PublicOrganizational = Partial<Organizational> & { isOpen: boolean };
+
+/**
+ * Columnas del negocio que viajan embebidas en cada producto del explorar
+ * (lo que la card necesita: nada de NIT/dueño; el horario es para `isOpen`).
+ */
+export const PRODUCT_ORGANIZATIONAL_SELECT = [
+  'organizational.id',
+  'organizational.legalName',
+  'organizational.tradeName',
+  'organizational.logoUrl',
+  'organizational.latitude',
+  'organizational.longitude',
+  'organizational.openTime',
+  'organizational.closeTime',
+  'organizational.openDays',
+  'organizational.temporarilyClosed',
+  'organizational.ratingAverage',
+  'organizational.ratingCount',
+];
+
+/** Campos del negocio que ve el cliente (sin NIT, dueño ni metadatos de admin). */
+export function toPublicOrganizational(
+  organizational: Organizational,
+): PublicOrganizational {
+  return {
+    id: organizational.id,
+    legalName: organizational.legalName,
+    tradeName: organizational.tradeName,
+    description: organizational.description,
+    logoUrl: organizational.logoUrl,
+    phone: organizational.phone,
+    address: organizational.address,
+    latitude: organizational.latitude,
+    longitude: organizational.longitude,
+    municipality: organizational.municipality,
+    tags: organizational.tags,
+    openTime: organizational.openTime,
+    closeTime: organizational.closeTime,
+    openDays: organizational.openDays,
+    temporarilyClosed: organizational.temporarilyClosed,
+    isOpen: isBusinessOpen(organizational),
+    ratingAverage: organizational.ratingAverage ?? null,
+    ratingCount: organizational.ratingCount ?? 0,
+    // Datos de pago: el checkout los muestra cuando el método no es
+    // efectivo (a dónde transferir + a nombre de quién).
+    paymentHolderName: organizational.paymentHolderName,
+    nequiNumber: organizational.nequiNumber,
+    nequiKey: organizational.nequiKey,
+    bancolombiaAccount: organizational.bancolombiaAccount,
+    bancolombiaAccountType: organizational.bancolombiaAccountType,
+    bancolombiaQrUrl: organizational.bancolombiaQrUrl,
+    nequiQrUrl: organizational.nequiQrUrl,
+  };
+}
 
 /**
  * Vista del CLIENTE (rol USER): explorar negocios y sus productos.
@@ -191,7 +245,7 @@ export class ExploreService {
     const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
 
     return new ResponsePaginationDto(
-      entities.map((organizational) => this.toPublicOrganizational(organizational)),
+      entities.map((organizational) => toPublicOrganizational(organizational)),
       pagination,
     );
   }
@@ -229,7 +283,7 @@ export class ExploreService {
       .getMany();
 
     return {
-      organizational: this.toPublicOrganizational(organizational),
+      organizational: toPublicOrganizational(organizational),
       categories,
     };
   }
@@ -253,18 +307,7 @@ export class ExploreService {
       .innerJoin('product.organizational', 'organizational')
       // Solo lo que la card necesita del negocio (nada de NIT/dueño).
       // Las columnas de horario van para calcular isOpen en el mapper.
-      .addSelect([
-        'organizational.id',
-        'organizational.legalName',
-        'organizational.tradeName',
-        'organizational.logoUrl',
-        'organizational.latitude',
-        'organizational.longitude',
-        'organizational.openTime',
-        'organizational.closeTime',
-        'organizational.openDays',
-        'organizational.temporarilyClosed',
-      ])
+      .addSelect(PRODUCT_ORGANIZATIONAL_SELECT)
       .where('product.isActive = true')
       .andWhere('organizational.isActive = true')
       .skip(skip)
@@ -403,40 +446,5 @@ export class ExploreService {
         };
       }),
     );
-  }
-
-  // ---------- helpers ----------
-
-  /** Campos del negocio que ve el cliente (sin NIT, dueño ni metadatos de admin). */
-  private toPublicOrganizational(
-    organizational: Organizational,
-  ): PublicOrganizational {
-    return {
-      id: organizational.id,
-      legalName: organizational.legalName,
-      tradeName: organizational.tradeName,
-      description: organizational.description,
-      logoUrl: organizational.logoUrl,
-      phone: organizational.phone,
-      address: organizational.address,
-      latitude: organizational.latitude,
-      longitude: organizational.longitude,
-      municipality: organizational.municipality,
-      tags: organizational.tags,
-      openTime: organizational.openTime,
-      closeTime: organizational.closeTime,
-      openDays: organizational.openDays,
-      temporarilyClosed: organizational.temporarilyClosed,
-      isOpen: isBusinessOpen(organizational),
-      // Datos de pago: el checkout los muestra cuando el método no es
-      // efectivo (a dónde transferir + a nombre de quién).
-      paymentHolderName: organizational.paymentHolderName,
-      nequiNumber: organizational.nequiNumber,
-      nequiKey: organizational.nequiKey,
-      bancolombiaAccount: organizational.bancolombiaAccount,
-      bancolombiaAccountType: organizational.bancolombiaAccountType,
-      bancolombiaQrUrl: organizational.bancolombiaQrUrl,
-      nequiQrUrl: organizational.nequiQrUrl,
-    };
   }
 }

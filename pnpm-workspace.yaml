@@ -3,3 +3,5 @@ allowBuilds:
   '@scarf/scarf': false
   # sharp necesita su postinstall (descarga los binarios nativos por plataforma)
   sharp: true
+  # ffmpeg-static descarga el binario de ffmpeg de la plataforma (video de productos)
+  ffmpeg-static: true

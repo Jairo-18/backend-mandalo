@@ -15,6 +15,8 @@ import {
 import { Transform, Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
 
+export const MIN_PRODUCT_PRICE = 1000;
+
 /**
  * El producto SIEMPRE queda asociado al negocio del usuario autenticado
  * (organizational con legalPersonId = user.id); por eso el DTO no acepta
@@ -48,10 +50,14 @@ export class CreateProductDto {
   @IsInt()
   categoryTypeId?: number;
 
-  @ApiProperty({ description: 'Precio de venta', example: 25000 })
+  // Mínimo $1.000: en prod se guardaron pizzas a $8, $22 y $64 (se quiso
+  // escribir 8.000, 22.000, 64.000).
+  @ApiProperty({ description: 'Precio de venta (mínimo 1.000)', example: 25000 })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
+  @Min(MIN_PRODUCT_PRICE, {
+    message: 'El precio del producto debe ser de mínimo $1.000.',
+  })
   priceSale: number;
 
   @ApiPropertyOptional({
@@ -81,6 +87,14 @@ export class PaginatedProductsParamsDto extends ParamsPaginationDto {
   @Type(() => Number)
   @IsInt()
   categoryTypeId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Solo ADMIN: negocio cuyos productos se listan',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  organizationalId?: number;
 }
 
 /**

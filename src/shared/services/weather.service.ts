@@ -23,6 +23,15 @@ export class WeatherService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly CACHE_TTL_MS = 15 * 60 * 1000;
   private readonly TIMEOUT_MS = 2500;
+  /**
+   * Tras un fallo (429 / timeout) no se vuelve a consultar en este lapso: en
+   * prod llegaban ráfagas de 5-13 previews seguidos, cada uno esperando los
+   * 2.5s del timeout o sumando otro 429 (el límite es por IP del servidor).
+   */
+  private readonly FAILURE_COOLDOWN_MS = 2 * 60 * 1000;
+  private failedUntil = 0;
+  /** Una sola consulta en vuelo por coordenada aunque lleguen varias a la vez. */
+  private readonly inFlight = new Map<string, Promise<number | null>>();
 
   async isBadWeather(
     latitude: number,
@@ -35,7 +44,25 @@ export class WeatherService {
     if (cached && cached.expiresAt > Date.now()) {
       return cached.precipitationMm >= heavyRainMm;
     }
+    if (Date.now() < this.failedUntil) return false;
 
+    let request = this.inFlight.get(key);
+    if (!request) {
+      request = this.fetchPrecipitation(key, latitude, longitude).finally(() =>
+        this.inFlight.delete(key),
+      );
+      this.inFlight.set(key, request);
+    }
+    const precipitationMm = await request;
+    return precipitationMm !== null && precipitationMm >= heavyRainMm;
+  }
+
+  /** mm de la última hora, o null si la API falló (fail-open: sin recargo). */
+  private async fetchPrecipitation(
+    key: string,
+    latitude: number,
+    longitude: number,
+  ): Promise<number | null> {
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=precipitation`;
       const controller = new AbortController();
@@ -52,12 +79,13 @@ export class WeatherService {
         precipitationMm,
         expiresAt: Date.now() + this.CACHE_TTL_MS,
       });
-      return precipitationMm >= heavyRainMm;
+      return precipitationMm;
     } catch (error) {
+      this.failedUntil = Date.now() + this.FAILURE_COOLDOWN_MS;
       this.logger.warn(
-        `Consulta de clima falló, se omite el recargo: ${(error as Error).message}`,
+        `Consulta de clima falló, se omite el recargo por ${this.FAILURE_COOLDOWN_MS / 60000} min: ${(error as Error).message}`,
       );
-      return false;
+      return null;
     }
   }
 }

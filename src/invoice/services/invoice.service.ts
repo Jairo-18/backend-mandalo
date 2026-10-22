@@ -16,7 +16,7 @@ import { OrganizationalRepository } from '../../shared/repositories/organization
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
 import { StateTypeRepository } from '../../shared/repositories/stateType.repository';
 import { PaidTypeRepository } from '../../shared/repositories/paidType.repository';
-import { Invoice } from '../../shared/entities/invoice.entity';
+import { Invoice, InvoiceType } from '../../shared/entities/invoice.entity';
 import { InvoiceDetail } from '../../shared/entities/invoiceDetail.entity';
 import { User } from '../../shared/entities/user.entity';
 import { StateType } from '../../shared/entities/stateType.entity';
@@ -39,11 +39,20 @@ import {
 import { WeatherService } from '../../shared/services/weather.service';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import {
+  CreateErrandDto,
   CreateInvoiceDto,
+  ErrandFeeParamsDto,
   PaginatedInvoicesParamsDto,
   UpdateInvoiceStateDto,
 } from '../dtos/invoice.dto';
+import { containsProfanity } from '../../shared/utils/profanity.util';
+import { fieldBadRequest } from '../../shared/utils/validation-errors.util';
 import { InvoiceGateway } from '../invoice.gateway';
+import { PromotionRepository } from '../../shared/repositories/promotion.repository';
+import {
+  isPromotionLive,
+  promotionItemsDescription,
+} from '../../promotion/promotion-rules';
 
 /**
  * Tarifa del domicilio + desglose de recargos por tipo (reunión con el
@@ -99,11 +108,44 @@ const TRANSITIONS: Record<string, { to: StateTypeCode; roles: RoleTypeCode[] }[]
     [StateTypeCode.CANCELLED]: [],
   };
 
+/**
+ * Transiciones de un MANDADO (sin negocio): nace en PREP (directo al pool de
+ * "Disponibles"); el repartidor que lo tomó marca "voy en camino" cuando ya
+ * hizo la diligencia (PREP → RUTA, sin código de recogida: no hay negocio
+ * que lo verifique) y el resto es igual a un pedido. El cliente solo cancela
+ * mientras nadie lo ha tomado (regla aparte en `changeState`); si el
+ * repartidor no puede hacerlo, lo LIBERA (`releaseErrand`), no lo cancela.
+ */
+const ERRAND_TRANSITIONS: Record<
+  string,
+  { to: StateTypeCode; roles: RoleTypeCode[] }[]
+> = {
+  [StateTypeCode.PREPARING]: [
+    { to: StateTypeCode.ON_ROUTE, roles: [RoleTypeCode.DELIVERY] },
+    { to: StateTypeCode.CANCELLED, roles: [RoleTypeCode.CLIENT] },
+  ],
+  [StateTypeCode.ON_ROUTE]: [
+    { to: StateTypeCode.DELIVERED, roles: [RoleTypeCode.DELIVERY] },
+  ],
+  [StateTypeCode.DELIVERY_FAILED]: [
+    { to: StateTypeCode.ON_ROUTE, roles: [RoleTypeCode.CLIENT] },
+    { to: StateTypeCode.CANCELLED, roles: [RoleTypeCode.CLIENT] },
+  ],
+  [StateTypeCode.DELIVERED]: [],
+  [StateTypeCode.CANCELLED]: [],
+};
+
+/** Municipio que manda en un pedido: el del negocio o, en un mandado, el suyo. */
+function invoiceMunicipalityId(invoice: Invoice): number | null {
+  return invoice.organizational?.municipalityId ?? invoice.municipalityId ?? null;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
     private readonly _invoiceRepository: InvoiceRepository,
     private readonly _productRepository: ProductRepository,
+    private readonly _promotionRepository: PromotionRepository,
     private readonly _organizationalRepository: OrganizationalRepository,
     private readonly _userAddressRepository: UserAddressRepository,
     private readonly _stateTypeRepository: StateTypeRepository,
@@ -322,11 +364,22 @@ export class InvoiceService {
       throw new BadRequestException('El método de pago no es válido.');
     }
 
+    // Cada ítem es un producto O una promoción (nunca los dos).
+    if (dto.items.some((item) => (item.productId == null) === (item.promotionId == null))) {
+      throw new BadRequestException(
+        'Cada ítem del pedido debe ser un producto o una promoción.',
+      );
+    }
+    const productItems = dto.items.filter((item) => item.productId != null);
+    const promotionItems = dto.items.filter((item) => item.promotionId != null);
+
     // Productos: todos del MISMO negocio, activos. Se snapshotean precios.
-    const productIds = [...new Set(dto.items.map((item) => item.productId))];
-    const products = await this._productRepository.find({
-      where: { id: In(productIds), organizationalId: organizational.id },
-    });
+    const productIds = [...new Set(productItems.map((item) => item.productId!))];
+    const products = productIds.length
+      ? await this._productRepository.find({
+          where: { id: In(productIds), organizationalId: organizational.id },
+        })
+      : [];
     if (products.length !== productIds.length) {
       throw new BadRequestException(
         'Algún producto no existe o no pertenece a este negocio.',
@@ -336,8 +389,8 @@ export class InvoiceService {
 
     const details: InvoiceDetail[] = [];
     let subtotal = 0;
-    for (const item of dto.items) {
-      const product = productById.get(item.productId)!;
+    for (const item of productItems) {
+      const product = productById.get(item.productId!)!;
       if (!product.isActive) {
         throw new BadRequestException(
           `El producto "${product.name}" ya no está disponible.`,
@@ -357,6 +410,41 @@ export class InvoiceService {
       detail.quantity = item.quantity;
       detail.lineTotal = lineTotal;
       details.push(detail);
+    }
+
+    // Promociones: del MISMO negocio y vigentes AHORA (misma regla que el
+    // carrusel del home). Una línea por promo, a SU precio, con el contenido
+    // congelado en texto para que el negocio sepa qué preparar.
+    if (promotionItems.length) {
+      const promotionIds = [...new Set(promotionItems.map((i) => i.promotionId!))];
+      const promotions = await this._promotionRepository.find({
+        where: { id: In(promotionIds), organizationalId: organizational.id },
+        relations: ['items', 'items.product'],
+      });
+      const promotionById = new Map(promotions.map((p) => [p.id, p]));
+      for (const item of promotionItems) {
+        const promotion = promotionById.get(item.promotionId!);
+        if (!promotion || !isPromotionLive(promotion)) {
+          throw new BadRequestException(
+            promotion
+              ? `La promoción "${promotion.title}" ya no está disponible.`
+              : 'Alguna promoción no existe o no pertenece a este negocio.',
+          );
+        }
+        const lineTotal = this.round2(promotion.price * item.quantity);
+        subtotal = this.round2(subtotal + lineTotal);
+
+        const detail = new InvoiceDetail();
+        detail.productId = null;
+        detail.promotionId = promotion.id;
+        detail.productName = `Promo: ${promotion.title}`.slice(0, 150);
+        detail.itemsDescription = promotionItemsDescription(promotion);
+        detail.unitPrice = promotion.price;
+        detail.discount = 0;
+        detail.quantity = item.quantity;
+        detail.lineTotal = lineTotal;
+        details.push(detail);
+      }
     }
 
     const pendingState = await this.resolveState(StateTypeCode.PENDING);
@@ -471,6 +559,221 @@ export class InvoiceService {
     return this.hideCodesFor(user, full);
   }
 
+  // ---------- mandados (cliente) ----------
+
+  /**
+   * Mínimo que puede ofrecer el cliente por un mandado: la tarifa por
+   * distancia de la app (recogida → entrega, con la tarifa de SU municipio)
+   * más los recargos vigentes (nocturno, clima, demanda) — el mismo cálculo
+   * de un domicilio normal. Sin punto de recogida, la distancia es 0 (tarifa
+   * base del municipio).
+   */
+  async previewErrandFee(
+    user: User,
+    params: ErrandFeeParamsDto,
+  ): Promise<DeliveryFeeBreakdown & { minimumFee: number }> {
+    const address = await this.findOwnAddress(user, params.addressId);
+    const breakdown = await this.errandFeeBreakdown(user, address, params);
+    return {
+      ...breakdown,
+      minimumFee: this.round2(breakdown.deliveryFee + breakdown.deliverySurcharge),
+    };
+  }
+
+  private async errandFeeBreakdown(
+    user: User,
+    address: { latitude?: number | null; longitude?: number | null },
+    params: { pickupLatitude?: number; pickupLongitude?: number },
+    pricing?: PricingValues,
+  ): Promise<DeliveryFeeBreakdown> {
+    const resolved =
+      pricing ?? (await this._deliveryPricingService.forMunicipality(user.municipalityId));
+    const hasPickup = params.pickupLatitude != null && params.pickupLongitude != null;
+    // Origen: el punto de recogida o, sin él, la misma dirección de entrega.
+    const origin = {
+      latitude: hasPickup ? params.pickupLatitude : (address.latitude ?? undefined),
+      longitude: hasPickup ? params.pickupLongitude : (address.longitude ?? undefined),
+      municipalityId: user.municipalityId ?? null,
+    };
+    return this.deliveryFeeFromOrg(
+      origin,
+      resolved,
+      address.latitude ?? undefined,
+      address.longitude ?? undefined,
+    );
+  }
+
+  async createErrand(user: User, dto: CreateErrandDto): Promise<Invoice> {
+    if (user.roleType?.code !== RoleTypeCode.CLIENT) {
+      throw new ForbiddenException('Solo los clientes pueden pedir mandados.');
+    }
+    if (dto.idempotencyKey) {
+      const existing = await this._invoiceRepository.findOne({
+        where: { userId: user.id, idempotencyKey: dto.idempotencyKey },
+      });
+      if (existing) {
+        return this.hideCodesFor(user, await this.findByIdWithRelations(existing.id));
+      }
+    }
+
+    const description = dto.description.trim();
+    if (description.length < 5) {
+      throw fieldBadRequest('description', 'Cuéntale al domiciliario con más detalle qué debe hacer.');
+    }
+    if (containsProfanity(description)) {
+      throw fieldBadRequest('description', 'La descripción tiene palabras no permitidas.');
+    }
+    if (containsProfanity(dto.notes)) {
+      throw fieldBadRequest('notes', 'Las notas tienen palabras no permitidas.');
+    }
+
+    const address = await this.findOwnAddress(user, dto.addressId);
+    const paidType = await this._paidTypeRepository.findOne({
+      where: { code: dto.paidTypeCode },
+    });
+    if (!paidType) throw new BadRequestException('El método de pago no es válido.');
+
+    const pricing = await this._deliveryPricingService.forMunicipality(user.municipalityId);
+    const breakdown = await this.errandFeeBreakdown(user, address, dto, pricing);
+    const minimumFee = this.round2(breakdown.deliveryFee + breakdown.deliverySurcharge);
+    const offered = this.round2(dto.offeredFee);
+    if (offered < minimumFee) {
+      throw fieldBadRequest(
+        'offeredFee',
+        `Lo mínimo para este mandado es ${this.formatCop(minimumFee)}.`,
+      );
+    }
+
+    // Lo ofrecido de más va a la parte base (la que reparte la comisión);
+    // los recargos siguen 100% para el repartidor, igual que en un pedido.
+    const deliveryFee = this.round2(offered - breakdown.deliverySurcharge);
+    const { mandaloCut: deliveryMandaloCut, riderCut: deliveryRiderCut } =
+      this._deliveryPricingService.splitFee(pricing, deliveryFee);
+    const purchase = this.round2(dto.purchaseAmount ?? 0);
+    const prepState = await this.resolveState(StateTypeCode.PREPARING);
+    const now = new Date();
+
+    let wonRace = true;
+    const saved = await this._invoiceRepository
+      .save(
+        this._invoiceRepository.create({
+          type: InvoiceType.ERRAND,
+          userId: user.id,
+          organizationalId: null,
+          municipalityId: user.municipalityId ?? null,
+          // Sin negocio que acepte: directo al pool de "Disponibles".
+          stateTypeId: prepState.id,
+          acceptedAt: now,
+          preparingAt: now,
+          paidTypeId: paidType.id,
+          pickupAddress: dto.pickupAddress?.trim() || null,
+          pickupLatitude: dto.pickupLatitude ?? null,
+          pickupLongitude: dto.pickupLongitude ?? null,
+          errandDescription: description,
+          errandPurchaseAmount: purchase,
+          deliveryAddress: address.address,
+          deliveryDetails: address.details ?? null,
+          deliveryLatitude: address.latitude ?? null,
+          deliveryLongitude: address.longitude ?? null,
+          deliveryPhotoUrl: address.photoUrl ?? null,
+          subtotal: 0,
+          deliveryFee,
+          deliveryMandaloCut,
+          deliveryRiderCut,
+          deliverySurcharge: breakdown.deliverySurcharge,
+          nightSurcharge: breakdown.nightSurcharge,
+          weatherSurcharge: breakdown.weatherSurcharge,
+          demandSurcharge: breakdown.demandSurcharge,
+          serviceFee: 0,
+          // Lo que el cliente le paga al repartidor: el mandado + la compra.
+          total: this.round2(offered + purchase),
+          retryFee: pricing.retryFee,
+          deliveryWaitMinutes: pricing.waitMinutes,
+          notes: dto.notes?.trim() || null,
+          idempotencyKey: dto.idempotencyKey ?? null,
+          pickupCode: null,
+          deliveryCode: this.randomCode(),
+        }),
+      )
+      .catch(async (e) => {
+        if (dto.idempotencyKey && (e as { code?: string })?.code === '23505') {
+          const existing = await this._invoiceRepository.findOne({
+            where: { userId: user.id, idempotencyKey: dto.idempotencyKey },
+          });
+          if (existing) {
+            wonRace = false;
+            return existing;
+          }
+        }
+        throw e;
+      });
+
+    const full = await this.findByIdWithRelations(saved.id);
+    if (wonRace) {
+      this._gateway.emitToDeliveries('invoice:available', {
+        ...full,
+        pickupCode: null,
+        deliveryCode: null,
+        deliveryPhotoUrl: null,
+      });
+      void this._pushService.sendToActiveDeliveries({
+        title: 'Nuevo mandado disponible 🛵',
+        body: `${description.slice(0, 80)} · ofrecen ${this.formatCop(offered)}`,
+        data: { type: 'order', invoiceId: full.id },
+      });
+    }
+    return this.hideCodesFor(user, full);
+  }
+
+  /**
+   * El repartidor que tomó un mandado lo LIBERA (no puede hacerlo): vuelve al
+   * pool de "Disponibles" para que lo tome otro. Solo antes de salir en
+   * camino (PREP) — después ya hizo la compra/recogida.
+   */
+  async releaseErrand(user: User, id: number): Promise<Invoice> {
+    this.assertRole(user, RoleTypeCode.DELIVERY);
+    const prepState = await this.resolveState(StateTypeCode.PREPARING);
+    const result = await this._invoiceRepository
+      .createQueryBuilder()
+      .update(Invoice)
+      .set({ deliveryUserId: null, takenAt: null })
+      .where('id = :id', { id })
+      .andWhere('type = :type', { type: InvoiceType.ERRAND })
+      .andWhere('"deliveryUserId" = :uid', { uid: user.id })
+      .andWhere('"stateTypeId" = :prep', { prep: prepState.id })
+      .execute();
+    if (!result.affected) {
+      throw new BadRequestException(
+        'Solo puedes liberar un mandado tuyo que aún no esté en camino.',
+      );
+    }
+    const full = await this.findByIdWithRelations(id);
+    this._gateway.emitToUser(full.userId, 'invoice:updated', { ...full, pickupCode: null });
+    this._gateway.emitToDelivery(user.id, 'invoice:updated', { ...full, deliveryCode: null });
+    this._gateway.emitToDeliveries('invoice:available', {
+      ...full,
+      pickupCode: null,
+      deliveryCode: null,
+      deliveryPhotoUrl: null,
+    });
+    void this._pushService.sendToUsers([full.userId], {
+      title: `Mandado #${full.id}`,
+      body: 'El domiciliario no pudo hacer tu mandado; lo estamos ofreciendo a otro.',
+      data: { type: 'order', invoiceId: full.id },
+    });
+    return this.hideCodesFor(user, full);
+  }
+
+  private async findOwnAddress(user: User, addressId: number) {
+    const address = await this._userAddressRepository.findOne({
+      where: { id: addressId, userId: user.id },
+    });
+    if (!address) {
+      throw new BadRequestException('La dirección de entrega no es válida o no te pertenece.');
+    }
+    return address;
+  }
+
   /**
    * Total histórico de tarifa de servicio (100% ingreso de Mándalo) sumado
    * sobre los pedidos ENTREGADOS — mismo criterio de "plata real" que usa
@@ -541,7 +844,14 @@ export class InvoiceService {
     } else if (isAdminRole(roleCode)) {
       // ADMIN ve todos, salvo que sea un admin REGIONAL — ahí solo ve los
       // pedidos del negocio de SU municipio. SUPERADMIN sigue viendo todo.
-      applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+      // (El de un mandado es el suyo propio: no tiene negocio.)
+      const scopeId = scopeMunicipalityIdFor(user);
+      if (scopeId != null) {
+        query.andWhere(
+          'COALESCE(organizational.municipalityId, invoice.municipalityId) = :scopeMunicipalityId',
+          { scopeMunicipalityId: scopeId },
+        );
+      }
       // Filtros opcionales para los cobros por período (negocio puntual +
       // rango de fechas de ENTREGA en hora local).
       if (params.organizationalId) {
@@ -563,6 +873,10 @@ export class InvoiceService {
           { dto: params.deliveredTo },
         );
       }
+    }
+
+    if (params.type) {
+      query.andWhere('invoice.type = :type', { type: params.type });
     }
 
     if (params.stateCodes) {
@@ -603,6 +917,16 @@ export class InvoiceService {
       .leftJoinAndSelect('invoice.organizational', 'organizational')
       .leftJoinAndSelect('invoice.stateType', 'stateType')
       .leftJoinAndSelect('invoice.paidType', 'paidType')
+      // Cliente: solo lo necesario para que el repartidor vea su calificación
+      // (reseñas) antes de tomar el pedido; el detalle completo va por findOne.
+      .leftJoin('invoice.user', 'client')
+      .addSelect([
+        'client.id',
+        'client.fullName',
+        'client.avatarUrl',
+        'client.ratingAverage',
+        'client.ratingCount',
+      ])
       .where('invoice.stateTypeId = :prep', { prep: prepState.id })
       .andWhere('invoice.deliveryUserId IS NULL');
 
@@ -614,13 +938,15 @@ export class InvoiceService {
       // ManyToOne (sin duplicar filas), así que es equivalente.
       const radiusKm =
         this._configService.get<number>('app.nearbyRadiusKm') ?? 10;
-      const distanceSql = `(6371 * acos(least(1, cos(radians(:nearLat)) * cos(radians(organizational.latitude))
-        * cos(radians(organizational.longitude) - radians(:nearLng))
-        + sin(radians(:nearLat)) * sin(radians(organizational.latitude)))))`;
+      // Punto de recogida: el negocio o, en un mandado, su recogida (sin
+      // ella, la entrega).
+      const lat = 'COALESCE(organizational.latitude, invoice."pickupLatitude", invoice."deliveryLatitude")';
+      const lng = 'COALESCE(organizational.longitude, invoice."pickupLongitude", invoice."deliveryLongitude")';
+      const distanceSql = `(6371 * acos(least(1, cos(radians(:nearLat)) * cos(radians(${lat}))
+        * cos(radians(${lng}) - radians(:nearLng))
+        + sin(radians(:nearLat)) * sin(radians(${lat})))))`;
       query
-        .andWhere(
-          'organizational.latitude IS NOT NULL AND organizational.longitude IS NOT NULL',
-        )
+        .andWhere(`${lat} IS NOT NULL AND ${lng} IS NOT NULL`)
         .andWhere(`${distanceSql} <= :radiusKm`, {
           nearLat: params.lat,
           nearLng: params.lng,
@@ -652,6 +978,22 @@ export class InvoiceService {
     this.assertRole(user, RoleTypeCode.DELIVERY);
     this.assertHasArl(user);
     const prepState = await this.resolveState(StateTypeCode.PREPARING);
+
+    // Mandado pagado por Nequi: el cliente le transfiere al repartidor, así
+    // que sin sus datos de Nequi no puede tomarlo.
+    const pending = await this._invoiceRepository.findOne({
+      where: { id },
+      relations: ['paidType'],
+    });
+    if (
+      pending?.type === InvoiceType.ERRAND &&
+      pending.paidType?.code === 'NEQUI' &&
+      !(user.nequiNumber || user.nequiKey)
+    ) {
+      throw new BadRequestException(
+        'Este mandado se paga por Nequi. Configura tu Nequi en "Mi cuenta → Mis datos de pago" para tomarlo.',
+      );
+    }
 
     // Claim atómico: solo lo toma si sigue disponible (evita carrera entre
     // dos repartidores). Si no afecta filas, ya lo tomó otro.
@@ -687,8 +1029,11 @@ export class InvoiceService {
     });
     this._gateway.emitToDeliveries('invoice:taken', { id });
     void this._pushService.sendToUsers([full.userId], {
-      title: `Pedido #${full.id}`,
-      body: 'Un repartidor tomó tu pedido. Pronto saldrá en camino.',
+      title: `${this.kindLabel(full)} #${full.id}`,
+      body:
+        full.type === InvoiceType.ERRAND
+          ? `${user.fullName || 'Un domiciliario'} tomó tu mandado y ya va a hacerlo.`
+          : 'Un repartidor tomó tu pedido. Pronto saldrá en camino.',
       data: { type: 'order', invoiceId: full.id },
     });
     void this._pushService.sendToUsers([full.organizational?.legalPersonId], {
@@ -1083,7 +1428,9 @@ export class InvoiceService {
     const target = dto.stateCode;
 
     // ¿La transición existe y este rol puede hacerla?
-    const allowed = (TRANSITIONS[fromCode] ?? []).find(
+    const isErrand = invoice.type === InvoiceType.ERRAND;
+    const table = isErrand ? ERRAND_TRANSITIONS : TRANSITIONS;
+    const allowed = (table[fromCode] ?? []).find(
       (t) => t.to === target && roleCode && t.roles.includes(roleCode),
     );
     if (!allowed) {
@@ -1095,7 +1442,20 @@ export class InvoiceService {
     // Ownership según el rol que hace la transición.
     await this.assertCanActOnTransition(user, invoice, target);
 
-    // El negocio no puede despachar sin un repartidor que lo recoja.
+    // Mandado: el cliente cancela solo mientras nadie lo ha tomado (después
+    // el repartidor ya pudo comprar/recoger; se arregla por el chat).
+    if (
+      isErrand &&
+      target === StateTypeCode.CANCELLED &&
+      fromCode === StateTypeCode.PREPARING &&
+      invoice.deliveryUserId
+    ) {
+      throw new BadRequestException(
+        'Un domiciliario ya tomó tu mandado. Escríbele por el chat si necesitas cambiar algo.',
+      );
+    }
+
+    // No se puede salir en camino sin un repartidor asignado.
     if (target === StateTypeCode.ON_ROUTE && !invoice.deliveryUserId) {
       throw new BadRequestException(
         'Aún no hay un repartidor asignado. Espera a que un repartidor tome el pedido.',
@@ -1386,7 +1746,11 @@ export class InvoiceService {
   private estimateDeliveryMinutes(invoice: Invoice): number {
     const fallback =
       this._configService.get<number>('app.deliveryEtaMinutes') ?? 20;
-    const org = invoice.organizational;
+    // Origen: el negocio o, en un mandado, la recogida (sin ella, la entrega).
+    const org = invoice.organizational ?? {
+      latitude: invoice.pickupLatitude ?? invoice.deliveryLatitude,
+      longitude: invoice.pickupLongitude ?? invoice.deliveryLongitude,
+    };
     if (
       org?.latitude == null ||
       org?.longitude == null ||
@@ -1445,6 +1809,8 @@ export class InvoiceService {
     actorRole?: RoleTypeCode,
   ): void {
     const num = `#${invoice.id}`;
+    const kind = this.kindLabel(invoice);
+    const isErrand = invoice.type === InvoiceType.ERRAND;
     const orgName =
       invoice.organizational?.tradeName ||
       invoice.organizational?.legalName ||
@@ -1454,7 +1820,7 @@ export class InvoiceService {
     switch (target) {
       case StateTypeCode.ACCEPTED:
         void this._pushService.sendToUsers([invoice.userId], {
-          title: `Pedido ${num} aceptado ✅`,
+          title: `${kind} ${num} aceptado ✅`,
           body: invoice.prepEstimatedMinutes
             ? `${orgName} aceptó tu pedido. Estará listo en ~${invoice.prepEstimatedMinutes} min.`
             : `${orgName} aceptó tu pedido.`,
@@ -1463,7 +1829,7 @@ export class InvoiceService {
         break;
       case StateTypeCode.PREPARING:
         void this._pushService.sendToUsers([invoice.userId], {
-          title: `Pedido ${num} en preparación 🍳`,
+          title: `${kind} ${num} en preparación 🍳`,
           body: `${orgName} está preparando tu pedido.`,
           data,
         });
@@ -1479,7 +1845,7 @@ export class InvoiceService {
           // FALL → RUTA lo decide el CLIENTE (reintentar pagando el cargo):
           // el que tiene que enterarse es el repartidor.
           void this._pushService.sendToUsers([invoice.deliveryUserId], {
-            title: `Pedido ${num}: el cliente pidió reintentar 🔁`,
+            title: `${kind} ${num}: el cliente pidió reintentar 🔁`,
             body: 'Vuelve a la dirección para entregar el pedido.',
             data,
           });
@@ -1488,8 +1854,8 @@ export class InvoiceService {
         void this._pushService.sendToUsers([invoice.userId], {
           title:
             invoice.retryCount > 0
-              ? `Reintento en camino 🛵 — pedido ${num}`
-              : `¡Tu pedido ${num} va en camino! 🛵`,
+              ? `Reintento en camino 🛵 — ${kind.toLowerCase()} ${num}`
+              : `¡Tu ${kind.toLowerCase()} ${num} va en camino! 🛵`,
           body:
             invoice.retryCount > 0
               ? 'El repartidor va de nuevo hacia tu dirección.'
@@ -1497,8 +1863,10 @@ export class InvoiceService {
           data,
         });
         // Lo despachó el negocio: el repartidor confirma que ya puede salir.
+        // (En un mandado lo marcó el propio repartidor: nada que avisarle.)
+        if (isErrand) break;
         void this._pushService.sendToUsers([invoice.deliveryUserId], {
-          title: `Pedido ${num} despachado 📦`,
+          title: `${kind} ${num} despachado 📦`,
           body: `${orgName} te entregó el pedido. Ve hacia la dirección del cliente.`,
           data,
         });
@@ -1507,7 +1875,7 @@ export class InvoiceService {
         // El repartidor no pudo entregar: el cliente decide reintentar
         // (pagando el cargo del Anexo I) o cancelar.
         void this._pushService.sendToUsers([invoice.userId], {
-          title: `No pudimos entregar tu pedido ${num} ⚠️`,
+          title: `No pudimos entregar tu ${kind.toLowerCase()} ${num} ⚠️`,
           body: invoice.deliveryFailReason
             ? `Motivo: ${invoice.deliveryFailReason}. Abre el pedido para reintentar o cancelar.`
             : 'Abre el pedido para reintentar la entrega o cancelarlo.',
@@ -1516,7 +1884,7 @@ export class InvoiceService {
         void this._pushService.sendToUsers(
           [invoice.organizational?.legalPersonId],
           {
-            title: `Pedido ${num}: entrega fallida ⚠️`,
+            title: `${kind} ${num}: entrega fallida ⚠️`,
             body: invoice.deliveryFailReason
               ? `El repartidor no pudo entregar. Motivo: ${invoice.deliveryFailReason}.`
               : 'El repartidor no pudo entregar. El cliente decide si reintenta o cancela.',
@@ -1526,14 +1894,14 @@ export class InvoiceService {
         break;
       case StateTypeCode.DELIVERED:
         void this._pushService.sendToUsers([invoice.userId], {
-          title: `Pedido ${num} entregado 🎉`,
+          title: `${kind} ${num} entregado 🎉`,
           body: '¡Gracias por pedir en Mandalo!',
           data,
         });
         void this._pushService.sendToUsers(
           [invoice.organizational?.legalPersonId],
           {
-            title: `Pedido ${num} entregado ✅`,
+            title: `${kind} ${num} entregado ✅`,
             body: 'El repartidor entregó el pedido al cliente.',
             data,
           },
@@ -1545,7 +1913,7 @@ export class InvoiceService {
           void this._pushService.sendToUsers(
             [invoice.organizational?.legalPersonId, invoice.deliveryUserId],
             {
-              title: `Pedido ${num} cancelado`,
+              title: `${kind} ${num} cancelado`,
               body: 'El cliente canceló el pedido.',
               data,
             },
@@ -1555,7 +1923,7 @@ export class InvoiceService {
           void this._pushService.sendToUsers(
             [invoice.userId, invoice.deliveryUserId],
             {
-              title: `Pedido ${num} cancelado`,
+              title: `${kind} ${num} cancelado`,
               body: invoice.cancellationReason
                 ? `Motivo: ${invoice.cancellationReason}`
                 : 'El negocio canceló el pedido.',
@@ -1758,6 +2126,11 @@ export class InvoiceService {
     }
   }
 
+  /** "Pedido" o "Mandado" para los textos de las notificaciones. */
+  private kindLabel(invoice: Pick<Invoice, 'type'>): string {
+    return invoice.type === InvoiceType.ERRAND ? 'Mandado' : 'Pedido';
+  }
+
   /** "$ 44.400" — formato COP corto para el cuerpo de las notificaciones. */
   private formatCop(value: number): string {
     return `$ ${Math.round(value).toLocaleString('es-CO')}`;
@@ -1774,6 +2147,7 @@ export class InvoiceService {
         'user',
         'details',
         'details.product',
+        'details.promotion',
       ],
     });
   }
@@ -1798,7 +2172,7 @@ export class InvoiceService {
       // adivine/pruebe ids de pedidos de otro municipio por fuera de su lista).
       if (
         isOutsideMunicipalityScope(
-          invoice.organizational?.municipalityId,
+          invoiceMunicipalityId(invoice),
           scopeMunicipalityIdFor(user),
         )
       ) {

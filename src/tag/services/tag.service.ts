@@ -13,6 +13,7 @@ import {
   PaginatedTagsParamsDto,
   UpdateTagDto,
 } from '../dtos/tag.dto';
+import { fieldConflict } from '../../shared/utils/validation-errors.util';
 
 @Injectable()
 export class TagService {
@@ -103,7 +104,7 @@ export class TagService {
   private async assertCodeAvailable(code: string): Promise<void> {
     const exists = await this._tagRepository.findOne({ where: { code } });
     if (exists) {
-      throw new ConflictException('El código de la etiqueta ya está en uso');
+      throw fieldConflict('code', 'El código de la etiqueta ya está en uso');
     }
   }
 
@@ -120,7 +121,7 @@ export class TagService {
     }
     const exists = await query.getOne();
     if (exists) {
-      throw new ConflictException('Ya existe una etiqueta con ese nombre');
+      throw fieldConflict('name', 'Ya existe una etiqueta con ese nombre');
     }
   }
 }

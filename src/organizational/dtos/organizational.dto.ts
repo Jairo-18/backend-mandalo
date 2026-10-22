@@ -244,12 +244,30 @@ export class UpdateOrganizationalDto extends PartialType(
   CreateOrganizationalDto,
 ) {}
 
-/** Parámetros de la consulta paginada (search sobre legalName/tradeName/NIT). */
+/**
+ * Parámetros de la consulta paginada. `search` busca en todo (razón social,
+ * nombre comercial, NIT y el nombre/identificación del representante); los
+ * demás filtran por un campo.
+ */
 export class PaginatedOrganizationalsParamsDto extends ParamsPaginationDto {
   @ApiPropertyOptional({ description: 'Filtrar por razón social (parcial)' })
   @IsOptional()
   @IsString()
   legalName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por nombre del negocio: comercial o razón social (parcial)',
+  })
+  @IsOptional()
+  @IsString()
+  businessName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por nombre del representante legal (parcial)',
+  })
+  @IsOptional()
+  @IsString()
+  legalPersonName?: string;
 
   @ApiPropertyOptional({
     description: 'Filtrar por número de identificación / NIT (parcial)',

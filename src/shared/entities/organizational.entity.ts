@@ -167,6 +167,19 @@ export class Organizational {
   })
   commissionOrderRate: number;
 
+  // Calificación recibida (reseñas, migración AddReviews): promedio 0.5–5 y
+  // cantidad. La mantiene un trigger de la DB, no el código.
+  @Column('numeric', {
+    precision: 3,
+    scale: 2,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  ratingAverage?: number | null;
+
+  @Column('int', { default: 0 })
+  ratingCount: number;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt?: Date;
 

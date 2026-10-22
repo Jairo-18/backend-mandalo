@@ -21,7 +21,7 @@ import { StateTypeCode } from '../shared/constants/stateTypeCode.enum';
 type TrackAuth = {
   invoiceId: number;
   clientUserId: string;
-  organizationalId: number;
+  organizationalId: number | null;
   expiresAt: number;
 };
 
@@ -197,7 +197,13 @@ export class InvoiceGateway
     this.server?.to(`user:${userId}`).emit(event, payload);
   }
 
-  emitToOrg(organizationalId: number, event: string, payload: unknown): void {
+  emitToOrg(
+    organizationalId: number | null | undefined,
+    event: string,
+    payload: unknown,
+  ): void {
+    // Los mandados no tienen negocio: no hay sala a la que avisar.
+    if (organizationalId == null) return;
     this.server?.to(`org:${organizationalId}`).emit(event, payload);
   }
 

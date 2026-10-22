@@ -18,8 +18,10 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { InvoiceUC } from '../useCases/invoice.uc';
 import {
+  CreateErrandDto,
   CreateInvoiceDto,
   DeliveryFeePreviewParamsDto,
+  ErrandFeeParamsDto,
   PaginatedInvoicesParamsDto,
   RejectPaymentDto,
   ReportDeliveryFailureDto,
@@ -100,6 +102,40 @@ export class InvoiceController {
     @Query() params: PaginatedInvoicesParamsDto,
   ): Promise<ResponsePaginationDto<Invoice>> {
     return this._invoiceUC.availableForDelivery(user, params);
+  }
+
+  // ---------- mandados ----------
+
+  // Mínimo que puede ofrecer el cliente (tarifa por distancia de la app).
+  // Antes de :id (literal, no numérico).
+  @Get('errand-fee')
+  async errandFee(@GetUser() user: User, @Query() params: ErrandFeeParamsDto) {
+    const data = await this._invoiceUC.previewErrandFee(user, params);
+    return { statusCode: HttpStatus.OK, data };
+  }
+
+  @Post('errand')
+  async createErrand(
+    @GetUser() user: User,
+    @Body() body: CreateErrandDto,
+  ): Promise<CreatedRecordResponseDto> {
+    const invoice = await this._invoiceUC.createErrand(user, body);
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: 'Mandado publicado. Te avisamos cuando un domiciliario lo tome.',
+      data: { rowId: String(invoice.id) },
+    };
+  }
+
+  /** El repartidor no puede hacer el mandado: vuelve a "Disponibles". */
+  @Post(':id/release')
+  async releaseErrand(@GetUser() user: User, @Param('id', ParseIntPipe) id: number) {
+    const invoice = await this._invoiceUC.releaseErrand(user, id);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Liberaste el mandado. Otro domiciliario podrá tomarlo.',
+      data: invoice,
+    };
   }
 
   @Get(':id')

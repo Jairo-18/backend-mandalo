@@ -328,7 +328,7 @@ export class ChatService {
     if (isAdminRole(roleCode)) {
       if (
         isOutsideMunicipalityScope(
-          invoice.organizational?.municipalityId,
+          invoice.organizational?.municipalityId ?? invoice.municipalityId,
           scopeMunicipalityIdFor(user),
         )
       ) {

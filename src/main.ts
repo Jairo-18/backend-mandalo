@@ -19,6 +19,7 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import * as bodyParser from 'body-parser';
 import { LoggingInterceptor } from './shared/interceptors/logging.interceptor';
+import { validationExceptionFactory } from './shared/utils/validation-errors.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
@@ -52,6 +53,8 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // Errores con el campo (`errors: {campo: mensaje}`) para la app.
+      exceptionFactory: validationExceptionFactory,
     }),
   );
 

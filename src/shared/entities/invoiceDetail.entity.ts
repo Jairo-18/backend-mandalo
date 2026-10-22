@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Invoice } from './invoice.entity';
 import { Product } from './product.entity';
+import { Promotion } from './promotion.entity';
 
 // Postgres devuelve los numeric como string; esto los convierte a number.
 const numericTransformer = {
@@ -39,6 +40,21 @@ export class InvoiceDetail {
   @ManyToOne(() => Product, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'productId' })
   product?: Product;
+
+  /**
+   * Línea de PROMOCIÓN (sin productId): la promo a su precio, con el
+   * contenido congelado en `itemsDescription` ("2× Hamburguesa, 1× Gaseosa")
+   * para que el negocio sepa qué preparar aunque después edite la promo.
+   */
+  @Column('int', { nullable: true })
+  promotionId?: number | null;
+
+  @ManyToOne(() => Promotion, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'promotionId' })
+  promotion?: Promotion | null;
+
+  @Column('varchar', { length: 500, nullable: true })
+  itemsDescription?: string | null;
 
   @Column('varchar', { length: 150 })
   productName: string;

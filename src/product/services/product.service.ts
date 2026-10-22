@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +14,11 @@ import { User } from '../../shared/entities/user.entity';
 import { LocalStorageService } from '../../localStorage/services/localStorage.service';
 import { InvoiceGateway } from '../../invoice/invoice.gateway';
 import { StateTypeCode } from '../../shared/constants/stateTypeCode.enum';
+import { isAdminRole } from '../../shared/roles/roleTypeCode.enum';
+import {
+  isOutsideMunicipalityScope,
+  scopeMunicipalityIdFor,
+} from '../../shared/utils/municipality-scope.util';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import {
@@ -24,7 +30,11 @@ import {
 /**
  * CRUD de productos DEL NEGOCIO del usuario autenticado: todas las
  * operaciones se limitan al organizational cuyo legalPersonId es el user del
- * JWT. El cliente nunca envía organizationalId — lo resuelve el backend.
+ * JWT. El negocio nunca envía organizationalId — lo resuelve el backend.
+ *
+ * El ADMIN también entra (revisar/corregir productos de un negocio): lista
+ * con `organizationalId` y edita/borra por id de producto, siempre dentro de
+ * su municipio (el SUPERADMIN, de todos). Crear sigue siendo solo del negocio.
  */
 @Injectable()
 export class ProductService {
@@ -86,7 +96,48 @@ export class ProductService {
     return saved;
   }
 
+  /**
+   * Negocio sobre el que opera la petición: el propio (NEGO) o, para el
+   * admin, el `organizationalId` pedido (dentro de su municipio).
+   */
+  private async resolveOrganizational(
+    user: User,
+    organizationalId?: number,
+  ): Promise<Organizational> {
+    if (!isAdminRole(user.roleType?.code)) return this.findMyOrganizational(user);
+    if (!organizationalId) {
+      throw new BadRequestException('Indica el negocio (organizationalId).');
+    }
+    const organizational = await this._organizationalRepository.findOne({
+      where: { id: organizationalId },
+    });
+    if (!organizational) throw new NotFoundException('Negocio no encontrado');
+    this.assertAdminScope(user, organizational);
+    return organizational;
+  }
+
+  private assertAdminScope(user: User, organizational: Organizational): void {
+    if (
+      isOutsideMunicipalityScope(
+        organizational.municipalityId,
+        scopeMunicipalityIdFor(user),
+      )
+    ) {
+      throw new ForbiddenException('Este negocio no es de tu municipio.');
+    }
+  }
+
   async findOne(user: User, id: number): Promise<Product> {
+    if (isAdminRole(user.roleType?.code)) {
+      const product = await this._productRepository.findOne({
+        where: { id },
+        relations: ['categoryType', 'organizational'],
+      });
+      if (!product) throw new NotFoundException('Producto no encontrado');
+      this.assertAdminScope(user, product.organizational);
+      delete product.organizational; // `save` no debe tocar el negocio
+      return product;
+    }
     const organizational = await this.findMyOrganizational(user);
     // El filtro por organizationalId evita ver productos de otros negocios.
     const product = await this._productRepository.findOne({
@@ -103,7 +154,10 @@ export class ProductService {
     user: User,
     params: PaginatedProductsParamsDto,
   ): Promise<ResponsePaginationDto<Product>> {
-    const organizational = await this.findMyOrganizational(user);
+    const organizational = await this.resolveOrganizational(
+      user,
+      params.organizationalId,
+    );
 
     const page = params.page ?? 1;
     const perPage = params.perPage ?? 10;
@@ -155,8 +209,12 @@ export class ProductService {
     const { organizationalId } = product;
     await this._productRepository.remove(product);
     this.notifyCatalogChanged(organizationalId, id, 'deleted');
-    // Las fotos del producto se borran del disco (solo las subidas propias).
-    for (const url of product.images ?? []) {
+    // Las fotos y el video del producto se borran del disco (solo los propios).
+    for (const url of [
+      ...(product.images ?? []),
+      product.videoUrl,
+      product.videoThumbnailUrl,
+    ]) {
       const publicId = this._localStorageService.publicIdFromUrl(url);
       if (publicId) await this._localStorageService.deleteImage(publicId);
     }
@@ -211,6 +269,43 @@ export class ProductService {
     }
 
     return { images: product.images };
+  }
+
+  /** Pone (o reemplaza) el video del producto. Borra el anterior del disco. */
+  async setVideo(
+    user: User,
+    id: number,
+    file: Express.Multer.File,
+  ): Promise<{ videoUrl: string; videoThumbnailUrl: string }> {
+    const product = await this.findOne(user, id);
+    const { videoUrl, thumbnailUrl } =
+      await this._localStorageService.saveProductVideo(file);
+
+    const previous = [product.videoUrl, product.videoThumbnailUrl];
+    product.videoUrl = videoUrl;
+    product.videoThumbnailUrl = thumbnailUrl;
+    await this._productRepository.save(product);
+    this.notifyCatalogChanged(product.organizationalId, product.id, 'updated');
+    await this.deleteFiles(previous);
+
+    return { videoUrl, videoThumbnailUrl: thumbnailUrl };
+  }
+
+  async removeVideo(user: User, id: number): Promise<void> {
+    const product = await this.findOne(user, id);
+    const previous = [product.videoUrl, product.videoThumbnailUrl];
+    product.videoUrl = null;
+    product.videoThumbnailUrl = null;
+    await this._productRepository.save(product);
+    this.notifyCatalogChanged(product.organizationalId, product.id, 'updated');
+    await this.deleteFiles(previous);
+  }
+
+  private async deleteFiles(urls: (string | null | undefined)[]): Promise<void> {
+    for (const url of urls) {
+      const publicId = this._localStorageService.publicIdFromUrl(url);
+      if (publicId) await this._localStorageService.deleteImage(publicId);
+    }
   }
 
   // ---------- helpers ----------

@@ -35,6 +35,9 @@ interface QuincenaTotals {
   weatherTotal: number;
   demandTotal: number;
   retryTotal: number;
+  /** Mandados: lo que el repartidor YA cobró directo al cliente (tarifa + recargos). */
+  collectedTotal: number;
+  errandsCount: number;
 }
 
 /** Fila que ve el admin: quincena (pagable) o mes/año (resumen). */
@@ -52,6 +55,14 @@ export interface DeliverySettlementPeriodItem {
   weatherTotal: number;
   demandTotal: number;
   retryTotal: number;
+  /**
+   * Mandados (el cliente le paga directo al repartidor): lo ya cobrado se
+   * descuenta. `netPayable` = riderCut - collectedTotal; negativo = el
+   * repartidor le debe a Mándalo la comisión de sus mandados.
+   */
+  collectedTotal: number;
+  errandsCount: number;
+  netPayable: number;
   /** Solo quincena: el pago real (se marca/desmarca). Null en mes/año. */
   settlement: {
     id: number;
@@ -61,6 +72,7 @@ export interface DeliverySettlementPeriodItem {
     ordersCount: number;
     deliveryTotal: number;
     riderCut: number;
+    collectedTotal: number;
   } | null;
   /** Solo mes/año: cuántas de sus quincenas/meses ya están pagados. */
   paidSubperiods?: number;
@@ -168,6 +180,7 @@ export class DeliverySettlementService {
     settlement.deliveryTotal = row.deliveryTotal;
     settlement.mandaloCut = row.mandaloCut;
     settlement.riderCut = row.riderCut;
+    settlement.collectedTotal = row.collectedTotal;
     settlement.isPaid = true;
     settlement.paidAt = new Date();
     if (dto.notes !== undefined) settlement.notes = dto.notes;
@@ -203,6 +216,8 @@ export class DeliverySettlementService {
               weatherTotal: 0,
               demandTotal: 0,
               retryTotal: 0,
+              collectedTotal: 0,
+              errandsCount: 0,
             },
             settlement,
           ),
@@ -230,6 +245,9 @@ export class DeliverySettlementService {
       weatherTotal: row.weatherTotal,
       demandTotal: row.demandTotal,
       retryTotal: row.retryTotal,
+      collectedTotal: row.collectedTotal,
+      errandsCount: row.errandsCount,
+      netPayable: this.round2(row.riderCut - row.collectedTotal),
       settlement: settlement
         ? {
             id: settlement.id,
@@ -239,6 +257,7 @@ export class DeliverySettlementService {
             ordersCount: settlement.ordersCount,
             deliveryTotal: settlement.deliveryTotal,
             riderCut: settlement.riderCut,
+            collectedTotal: settlement.collectedTotal ?? 0,
           }
         : null,
     };
@@ -259,6 +278,8 @@ export class DeliverySettlementService {
       weather: number;
       demand: number;
       retry: number;
+      collected: number;
+      errands: number;
       paid: number;
       total: number;
     };
@@ -272,6 +293,8 @@ export class DeliverySettlementService {
       weather: 0,
       demand: 0,
       retry: 0,
+      collected: 0,
+      errands: 0,
       paid: 0,
       total: 0,
     });
@@ -291,6 +314,8 @@ export class DeliverySettlementService {
         acc.weather += m.weatherTotal;
         acc.demand += m.demandTotal;
         acc.retry += m.retryTotal;
+        acc.collected += m.collectedTotal;
+        acc.errands += m.errandsCount;
         acc.total += 1;
         if (m.paidSubperiods === m.totalSubperiods && (m.totalSubperiods ?? 0) > 0) acc.paid += 1;
         byYear.set(year, acc);
@@ -312,6 +337,9 @@ export class DeliverySettlementService {
             weatherTotal: this.round2(acc.weather),
             demandTotal: this.round2(acc.demand),
             retryTotal: this.round2(acc.retry),
+            collectedTotal: this.round2(acc.collected),
+            errandsCount: acc.errands,
+            netPayable: this.round2(acc.rider - acc.collected),
             settlement: null,
             paidSubperiods: acc.paid,
             totalSubperiods: acc.total,
@@ -332,6 +360,8 @@ export class DeliverySettlementService {
       acc.weather += q.weatherTotal;
       acc.demand += q.demandTotal;
       acc.retry += q.retryTotal;
+      acc.collected += q.collectedTotal;
+      acc.errands += q.errandsCount;
       acc.total += 1;
       if (q.settlement?.isPaid) acc.paid += 1;
       byMonth.set(month, acc);
@@ -353,6 +383,9 @@ export class DeliverySettlementService {
           weatherTotal: this.round2(acc.weather),
           demandTotal: this.round2(acc.demand),
           retryTotal: this.round2(acc.retry),
+          collectedTotal: this.round2(acc.collected),
+          errandsCount: acc.errands,
+          netPayable: this.round2(acc.rider - acc.collected),
           settlement: null,
           paidSubperiods: acc.paid,
           totalSubperiods: acc.total,
@@ -393,11 +426,13 @@ export class DeliverySettlementService {
       .addSelect('invoice."weatherSurcharge"', 'weatherSurcharge')
       .addSelect('invoice."demandSurcharge"', 'demandSurcharge')
       .addSelect('invoice."retryFeeCharged"', 'retryFeeCharged')
+      .addSelect('invoice."type"', 'type')
       .where('invoice."deliveryUserId" = :uid', { uid: deliveryUserId })
       .andWhere(
         `((stateType.code = :delivered AND invoice."deliveredAt" IS NOT NULL)
           OR (stateType.code = :cancelled AND invoice."deliveryFailedAt" IS NOT NULL
-              AND invoice."cancelledAt" IS NOT NULL AND paidType.code <> :cash))`,
+              AND invoice."cancelledAt" IS NOT NULL AND paidType.code <> :cash
+              AND invoice."type" = 'ORDER'))`,
         {
           delivered: StateTypeCode.DELIVERED,
           cancelled: StateTypeCode.CANCELLED,
@@ -419,6 +454,7 @@ export class DeliverySettlementService {
       weatherSurcharge: string;
       demandSurcharge: string;
       retryFeeCharged: string;
+      type: string;
     }>();
 
     const byStart = new Map<
@@ -433,6 +469,8 @@ export class DeliverySettlementService {
         weatherTotal: number;
         demandTotal: number;
         retryTotal: number;
+        collectedTotal: number;
+        errandsCount: number;
       }
     >();
     for (const row of rows) {
@@ -462,8 +500,15 @@ export class DeliverySettlementService {
           weatherTotal: 0,
           demandTotal: 0,
           retryTotal: 0,
+          collectedTotal: 0,
+          errandsCount: 0,
         };
       acc.ordersCount += 1;
+      // Mandado: el cliente le pagó la tarifa directo al repartidor.
+      if (row.type === 'ERRAND') {
+        acc.collectedTotal += fee + surcharge;
+        acc.errandsCount += 1;
+      }
       acc.deliveryTotal += fee + surcharge;
       acc.mandaloCut += mandaloCut;
       acc.riderCut += riderCut + surcharge;
@@ -488,6 +533,8 @@ export class DeliverySettlementService {
         weatherTotal: this.round2(acc.weatherTotal),
         demandTotal: this.round2(acc.demandTotal),
         retryTotal: this.round2(acc.retryTotal),
+        collectedTotal: this.round2(acc.collectedTotal),
+        errandsCount: acc.errandsCount,
       }));
   }
 

@@ -19,6 +19,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { RoleTypeCode } from '../../shared/roles/roleTypeCode.enum';
 
@@ -544,4 +545,29 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @IsBoolean()
   acceptedTerms?: boolean;
+}
+
+/**
+ * "Mis datos de pago" del REPARTIDOR: a dónde le transfiere el cliente un
+ * mandado pagado por Nequi (solo Nequi por ahora). El QR va aparte (upload).
+ * `null` o vacío borra el campo.
+ */
+export class UpdateMyPaymentInfoDto {
+  @ApiPropertyOptional({ example: 'Juan Pérez', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  paymentHolderName?: string | null;
+
+  @ApiPropertyOptional({ example: '3001234567', maxLength: 30 })
+  @IsOptional()
+  @IsString()
+  @Matches(/^$|^3\d{9}$/, { message: 'El número de Nequi debe ser un celular de 10 dígitos que empiece por 3.' })
+  nequiNumber?: string | null;
+
+  @ApiPropertyOptional({ description: 'Llave de Nequi (Bre-B)', example: '@juanp', maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  nequiKey?: string | null;
 }

@@ -58,6 +58,13 @@ export class Product {
   @Column('text', { array: true, default: () => "'{}'" })
   images: string[];
 
+  // Video corto del producto (4:3 horizontal 960×720, ≤ 10 s) y su miniatura.
+  @Column('varchar', { length: 500, nullable: true })
+  videoUrl?: string | null;
+
+  @Column('varchar', { length: 500, nullable: true })
+  videoThumbnailUrl?: string | null;
+
   @Column('boolean', { default: true })
   isActive: boolean;
 

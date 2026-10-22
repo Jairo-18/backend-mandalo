@@ -13,6 +13,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ParamsPaginationDto } from '../../shared/dtos/pagination.dto';
@@ -46,12 +47,22 @@ export class RejectPaymentDto {
   reason: string;
 }
 
-/** Un renglón del pedido: qué producto y cuántos. El precio lo pone el backend. */
+/**
+ * Un renglón del pedido: un PRODUCTO o una PROMOCIÓN del negocio (exactamente
+ * uno de los dos) y cuántos. El precio lo pone el backend.
+ */
 export class CreateInvoiceItemDto {
-  @ApiProperty({ description: 'ID del producto del negocio', example: 12 })
+  @ApiPropertyOptional({ description: 'ID del producto del negocio', example: 12 })
+  @ValidateIf((item: CreateInvoiceItemDto) => item.promotionId == null)
   @Type(() => Number)
-  @IsInt()
-  productId: number;
+  @IsInt({ message: 'Cada ítem del pedido debe ser un producto o una promoción.' })
+  productId?: number;
+
+  @ApiPropertyOptional({ description: 'ID de una promoción vigente del negocio', example: 3 })
+  @ValidateIf((item: CreateInvoiceItemDto) => item.productId == null)
+  @Type(() => Number)
+  @IsInt({ message: 'Cada ítem del pedido debe ser un producto o una promoción.' })
+  promotionId?: number;
 
   @ApiProperty({ description: 'Cantidad', example: 2, minimum: 1 })
   @Type(() => Number)
@@ -219,6 +230,14 @@ export class PaginatedInvoicesParamsDto extends ParamsPaginationDto {
   @IsString()
   stateCodes?: string;
 
+  @ApiPropertyOptional({
+    description: 'Solo pedidos a negocios (ORDER) o solo mandados (ERRAND)',
+    enum: ['ORDER', 'ERRAND'],
+  })
+  @IsOptional()
+  @IsEnum({ ORDER: 'ORDER', ERRAND: 'ERRAND' })
+  type?: 'ORDER' | 'ERRAND';
+
   // Coordenadas del repartidor (solo /invoice/available): limita a pedidos
   // cuyo negocio esté dentro del radio APP_NEARBY_RADIUS_KM y ordena por
   // cercanía al punto de recogida.
@@ -265,4 +284,89 @@ export class PaginatedInvoicesParamsDto extends ParamsPaginationDto {
     message: 'deliveredTo debe tener formato YYYY-MM-DD',
   })
   deliveredTo?: string;
+}
+
+// ---------- mandados ----------
+
+/** Tope de la compra que el repartidor adelanta de su bolsillo en un mandado. */
+export const ERRAND_MAX_PURCHASE = 150000;
+/** Métodos de pago de un mandado: se le paga directo al repartidor. */
+export const ERRAND_PAID_TYPES = ['EFEC', 'NEQUI'] as const;
+
+/** Punto de recogida opcional + dirección de entrega (para cotizar el mínimo). */
+export class ErrandFeeParamsDto {
+  @ApiProperty({ description: 'Dirección de entrega del cliente (userAddress)', example: 7 })
+  @Type(() => Number)
+  @IsInt()
+  addressId: number;
+
+  @ApiPropertyOptional({ example: 0.5165 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  pickupLatitude?: number;
+
+  @ApiPropertyOptional({ example: -76.4963 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  pickupLongitude?: number;
+}
+
+/**
+ * "Pedir un mandado": qué hacer, dónde recoger (opcional) y entregar, cuánto
+ * ofrece el cliente (mínimo: la tarifa por distancia de la app) y, si hay que
+ * comprar algo, cuánto cuesta aprox. (lo adelanta el repartidor).
+ */
+export class CreateErrandDto extends ErrandFeeParamsDto {
+  @ApiPropertyOptional({ example: 'Droguería La Colonial, Cl. 10 #5-20' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  pickupAddress?: string;
+
+  @ApiProperty({ example: 'Comprar un acetaminofén de 500 mg', maxLength: 500 })
+  @IsString()
+  @IsNotEmpty({ message: 'Cuéntale al domiciliario qué debe hacer.' })
+  @MaxLength(500)
+  description: string;
+
+  @ApiPropertyOptional({ example: 'Preguntar por Don José en la caja', maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Valor aprox. de la compra que adelanta el repartidor (0 = sin compra)',
+    example: 12000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(ERRAND_MAX_PURCHASE, {
+    message: `La compra no puede pasar de $${ERRAND_MAX_PURCHASE.toLocaleString('es-CO')}.`,
+  })
+  purchaseAmount?: number;
+
+  @ApiProperty({ description: 'Cuánto ofrece el cliente por el mandado', example: 8000 })
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Ingresa cuánto ofreces por el mandado.' })
+  @Min(0)
+  offeredFee: number;
+
+  @ApiProperty({ enum: ERRAND_PAID_TYPES, example: 'EFEC' })
+  @IsString()
+  @IsEnum(
+    Object.fromEntries(ERRAND_PAID_TYPES.map((c) => [c, c])),
+    { message: 'El mandado se paga en efectivo o por Nequi.' },
+  )
+  paidTypeCode: (typeof ERRAND_PAID_TYPES)[number];
+
+  @ApiPropertyOptional({ example: 'f0b3c9d2-6e2a-4b7a-9f9e-9d6b8a2a3c11' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotencyKey?: string;
 }

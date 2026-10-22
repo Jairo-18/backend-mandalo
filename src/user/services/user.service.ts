@@ -24,6 +24,7 @@ import {
   CreateUserDto,
   RegisterUserDto,
   ResendDeliveryDocumentsDto,
+  UpdateMyPaymentInfoDto,
   UpdateUserDto,
 } from '../dtos/user.dto';
 import { RoleTypeCode, isAdminRole } from '../../shared/roles/roleTypeCode.enum';
@@ -43,6 +44,11 @@ import { CURRENT_TERMS_VERSION } from '../../shared/constants/terms.constant';
 import { UserAddressRepository } from '../../shared/repositories/userAddress.repository';
 import { InvoiceRepository } from '../../shared/repositories/invoice.repository';
 import { OrganizationalRepository } from '../../shared/repositories/organizational.repository';
+import {
+  fieldBadRequest,
+  fieldConflict,
+} from '../../shared/utils/validation-errors.util';
+import { identificationError } from '../../shared/utils/identification.util';
 
 const SALT_ROUNDS = 12;
 const EMAIL_VERIFICATION_TOKEN_MINUTES = 30;
@@ -212,6 +218,10 @@ export class UserService {
     await this.assertPhoneAvailable(data.phone);
     await this.assertIdentificationAvailable(data.identificationNumber);
     await this.assertRelationsExist(data);
+    await this.assertValidIdentification(
+      data.identificationTypeId,
+      data.identificationNumber,
+    );
 
     // El rol puede venir por uuid (roleTypeId) o por code (roleTypeCode);
     // el code manda si vienen los dos. `targetRoleCode` se resuelve siempre
@@ -422,6 +432,10 @@ export class UserService {
     await this.assertUsernameAvailable(dto.username);
     await this.assertPhoneAvailable(dto.phone);
     await this.assertIdentificationAvailable(dto.identificationNumber);
+    await this.assertValidIdentification(
+      dto.identificationTypeId,
+      dto.identificationNumber,
+    );
 
     const roleType = await this._roleTypeRepository.findOne({
       where: { code: roleCode },
@@ -529,6 +543,10 @@ export class UserService {
     await this.assertPhoneAvailable(dto.phone);
     await this.assertIdentificationAvailable(dto.identificationNumber);
     await this.assertRelationsExist(dto);
+    await this.assertValidIdentification(
+      dto.identificationTypeId,
+      dto.identificationNumber,
+    );
 
     const roleType = await this._roleTypeRepository.findOne({
       where: { code: RoleTypeCode.CLIENT },
@@ -586,7 +604,7 @@ export class UserService {
     if (!existing) return;
 
     if (existing.isEmailVerified) {
-      throw new ConflictException('El correo electrónico ya está en uso');
+      throw fieldConflict('email', 'El correo electrónico ya está en uso');
     }
 
     const tokenExpired =
@@ -1000,6 +1018,16 @@ export class UserService {
       await this.assertIdentificationAvailable(dto.identificationNumber);
     }
     await this.assertRelationsExist(dto);
+    // Se valida lo que QUEDA guardado (puede cambiar solo el tipo o solo el número).
+    if (
+      dto.identificationNumber !== undefined ||
+      dto.identificationTypeId !== undefined
+    ) {
+      await this.assertValidIdentification(
+        dto.identificationTypeId ?? user.identificationTypeId,
+        dto.identificationNumber ?? user.identificationNumber,
+      );
+    }
 
     // avatarUrl se ignora acá: solo lo toca updateAvatar() (limpia el archivo viejo).
     const { password, roleTypeCode, acceptedTerms, avatarUrl: _a, ...rest } = dto;
@@ -1202,6 +1230,15 @@ export class UserService {
     user.googleId = null;
 
     await this._userRepository.save(user);
+    // Los favoritos son datos personales sin valor contable: se borran.
+    await this._userRepository.manager.query(
+      'DELETE FROM "favoriteBusiness" WHERE "userId" = $1',
+      [user.id],
+    );
+    await this._userRepository.manager.query(
+      'DELETE FROM "favoriteProduct" WHERE "userId" = $1',
+      [user.id],
+    );
 
     if (businesses > 0) {
       await this._organizationalRepository.update(
@@ -1427,6 +1464,10 @@ export class UserService {
     if (dto.identificationNumber !== user.identificationNumber) {
       await this.assertIdentificationAvailable(dto.identificationNumber);
     }
+    await this.assertValidIdentification(
+      dto.identificationTypeId,
+      dto.identificationNumber,
+    );
 
     const roleType = await this._roleTypeRepository.findOne({
       where: { code: RoleTypeCode.DELIVERY },
@@ -1633,6 +1674,75 @@ export class UserService {
     return { avatarUrl: imageUrl };
   }
 
+
+  // ---------- datos de pago del repartidor (mandados por Nequi) ----------
+
+  async updateMyPaymentInfo(
+    id: string,
+    dto: UpdateMyPaymentInfoDto,
+  ): Promise<Pick<User, 'paymentHolderName' | 'nequiNumber' | 'nequiKey' | 'nequiQrUrl'>> {
+    const user = await this.findOne(id);
+    this.assertIsDelivery(user);
+    const clean = (v?: string | null) => (v == null ? undefined : v.trim() || null);
+    const patch = {
+      paymentHolderName: clean(dto.paymentHolderName),
+      nequiNumber: clean(dto.nequiNumber),
+      nequiKey: clean(dto.nequiKey),
+    };
+    for (const key of Object.keys(patch) as (keyof typeof patch)[]) {
+      if (patch[key] === undefined) delete patch[key];
+    }
+    if (Object.keys(patch).length) await this._userRepository.update(id, patch);
+    const fresh = await this.findOne(id);
+    return {
+      paymentHolderName: fresh.paymentHolderName ?? null,
+      nequiNumber: fresh.nequiNumber ?? null,
+      nequiKey: fresh.nequiKey ?? null,
+      nequiQrUrl: fresh.nequiQrUrl ?? null,
+    };
+  }
+
+  async uploadMyNequiQr(id: string, file: Express.Multer.File): Promise<{ nequiQrUrl: string }> {
+    const user = await this.findOne(id);
+    this.assertIsDelivery(user);
+    if (!file) throw new BadRequestException('Adjunta la imagen del QR de Nequi.');
+    const { imageUrl } = await this._localStorageService.saveImage(file, 'payments');
+    const oldPublicId = this._localStorageService.publicIdFromUrl(user.nequiQrUrl);
+    await this._userRepository.update(id, { nequiQrUrl: imageUrl });
+    if (oldPublicId) await this._localStorageService.deleteImage(oldPublicId);
+    return { nequiQrUrl: imageUrl };
+  }
+
+  async removeMyNequiQr(id: string): Promise<void> {
+    const user = await this.findOne(id);
+    this.assertIsDelivery(user);
+    const oldPublicId = this._localStorageService.publicIdFromUrl(user.nequiQrUrl);
+    await this._userRepository.update(id, { nequiQrUrl: null });
+    if (oldPublicId) await this._localStorageService.deleteImage(oldPublicId);
+  }
+
+  private assertIsDelivery(user: User): void {
+    if (user.roleType?.code !== RoleTypeCode.DELIVERY) {
+      throw new ForbiddenException('Los datos de pago son solo para domiciliarios.');
+    }
+  }
+
+  /**
+   * Número de identificación válido para su tipo (CC/TI solo dígitos; NIT
+   * con DV opcional comprobado — ver `identification.util.ts`). Sin tipo o
+   * sin número no se valida (las cuentas ADM… de los admins no tienen tipo).
+   */
+  private async assertValidIdentification(
+    identificationTypeId?: number | null,
+    identificationNumber?: string | null,
+  ): Promise<void> {
+    if (!identificationTypeId || !identificationNumber) return;
+    const type = await this._identificationTypeRepository.findOne({
+      where: { id: identificationTypeId },
+    });
+    const error = identificationError(type?.code, identificationNumber);
+    if (error) throw fieldBadRequest('identificationNumber', error);
+  }
   /** Quita la foto de perfil (opcional): borra el archivo del disco y limpia la columna. */
   async removeAvatar(id: string, admin?: User): Promise<void> {
     const user = await this.findOne(id, admin);
@@ -1649,7 +1759,7 @@ export class UserService {
     if (!email) return;
     const exists = await this._userRepository.findOne({ where: { email } });
     if (exists) {
-      throw new ConflictException('El email ya está registrado');
+      throw fieldConflict('email', 'El email ya está registrado');
     }
   }
 
@@ -1657,7 +1767,7 @@ export class UserService {
     if (!username) return;
     const exists = await this._userRepository.findOne({ where: { username } });
     if (exists) {
-      throw new ConflictException('El nombre de usuario ya está en uso');
+      throw fieldConflict('username', 'El nombre de usuario ya está en uso');
     }
   }
 
@@ -1665,7 +1775,7 @@ export class UserService {
     if (!phone) return;
     const exists = await this._userRepository.findOne({ where: { phone } });
     if (exists) {
-      throw new ConflictException('El teléfono ya está registrado');
+      throw fieldConflict('phone', 'El teléfono ya está registrado');
     }
   }
 
@@ -1677,7 +1787,8 @@ export class UserService {
       where: { identificationNumber },
     });
     if (exists) {
-      throw new ConflictException(
+      throw fieldConflict(
+        'identificationNumber',
         'El número de identificación ya está registrado',
       );
     }

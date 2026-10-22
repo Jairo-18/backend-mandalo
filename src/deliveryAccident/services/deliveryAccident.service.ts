@@ -15,7 +15,6 @@ import { LocalStorageService } from '../../localStorage/services/localStorage.se
 import { ResponsePaginationDto } from '../../shared/dtos/pagination.dto';
 import { PageMetaDto } from '../../shared/dtos/pageMeta.dto';
 import {
-  applyMunicipalityScope,
   isOutsideMunicipalityScope,
   scopeMunicipalityIdFor,
 } from '../../shared/utils/municipality-scope.util';
@@ -94,7 +93,7 @@ export class DeliveryAccidentService {
         body: `${user.fullName} reportó "${dto.reasonCode}" en el pedido #${invoice.id}.`,
         data: { type: 'accident', accidentId: accident.id },
       },
-      invoice.organizational?.municipalityId,
+      invoice.organizational?.municipalityId ?? invoice.municipalityId,
     );
 
     const settings = await this._appSettingsRepository.findOne({
@@ -125,8 +124,15 @@ export class DeliveryAccidentService {
       .addOrderBy('accident.createdAt', 'DESC')
       .skip((page - 1) * perPage)
       .take(perPage);
-    // Admin regional: solo accidentes de pedidos del negocio de SU municipio.
-    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+    // Admin regional: solo accidentes de pedidos del negocio de SU municipio
+    // (en un mandado, el municipio del propio mandado).
+    const scopeId = scopeMunicipalityIdFor(user);
+    if (scopeId != null) {
+      query.andWhere(
+        'COALESCE(organizational.municipalityId, invoice.municipalityId) = :scopeMunicipalityId',
+        { scopeMunicipalityId: scopeId },
+      );
+    }
 
     if (params.onlyPending === true) {
       query.andWhere('accident.reviewedAt IS NULL');
@@ -149,7 +155,13 @@ export class DeliveryAccidentService {
       .leftJoin('accident.invoice', 'invoice')
       .leftJoin('invoice.organizational', 'organizational')
       .where('accident.reviewedAt IS NULL');
-    applyMunicipalityScope(query, 'organizational', scopeMunicipalityIdFor(user));
+    const scopeId = scopeMunicipalityIdFor(user);
+    if (scopeId != null) {
+      query.andWhere(
+        'COALESCE(organizational.municipalityId, invoice.municipalityId) = :scopeMunicipalityId',
+        { scopeMunicipalityId: scopeId },
+      );
+    }
     return query.getCount();
   }
 
@@ -170,7 +182,8 @@ export class DeliveryAccidentService {
     // (evita adivinar/probar ids de otro municipio por fuera de su lista).
     if (
       isOutsideMunicipalityScope(
-        accident.invoice?.organizational?.municipalityId,
+        accident.invoice?.organizational?.municipalityId ??
+          accident.invoice?.municipalityId,
         scopeMunicipalityIdFor(user),
       )
     ) {

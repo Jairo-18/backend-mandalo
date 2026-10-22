@@ -31,7 +31,9 @@ export class CrudUserService {
       .leftJoinAndSelect('user.identificationType', 'identificationType')
       .skip(skip)
       .take(perPage)
-      .orderBy('user.createdAt', params.order ?? 'ASC');
+      .orderBy('user.createdAt', params.order ?? 'ASC')
+      // Desempate estable (creados en el mismo instante, p. ej. alta masiva).
+      .addOrderBy('user.id', params.order ?? 'ASC');
 
     // Admin regional (no SUPERADMIN): nunca ve cuentas ADMIN/SUPERADMIN;
     // Cliente/Domiciliario se filtran por su propio municipio, Negocio por

@@ -68,6 +68,14 @@ export class ExploreController {
     return this._exploreUC.paginatedAllProducts(params);
   }
 
+  /** Filas del home por categoría (productos de todos los negocios cercanos). */
+  @Get('home-rows')
+  @CacheTTL(2 * 60_000)
+  async homeRows(@Query() params: PaginatedExploreProductsParamsDto) {
+    const data = await this._exploreUC.homeRows(params);
+    return { statusCode: HttpStatus.OK, data };
+  }
+
   @Get('organizationals')
   @CacheTTL(2 * 60_000)
   @GetPaginatedExploreOrganizationalsDocs()
@@ -86,6 +94,14 @@ export class ExploreController {
       statusCode: HttpStatus.OK,
       data,
     };
+  }
+
+  /** Menú de la tienda por secciones (Más pedidos + categorías A–Z). */
+  @Get('organizationals/:id/menu')
+  @CacheTTL(2 * 60_000)
+  async storeMenu(@Param('id', ParseIntPipe) id: number) {
+    const data = await this._exploreUC.storeMenu(id);
+    return { statusCode: HttpStatus.OK, data };
   }
 
   @Get('organizationals/:id/products')

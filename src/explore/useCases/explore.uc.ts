@@ -33,6 +33,14 @@ export class ExploreUC {
     return this._exploreService.paginatedProducts(organizationalId, params);
   }
 
+  homeRows(params: PaginatedExploreProductsParamsDto) {
+    return this._exploreService.homeRows(params);
+  }
+
+  storeMenu(organizationalId: number) {
+    return this._exploreService.storeMenu(organizationalId);
+  }
+
   deliveryEstimates(params: DeliveryEstimateParamsDto) {
     return this._exploreService.deliveryEstimates(params);
   }

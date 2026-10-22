@@ -35,6 +35,24 @@ export type DeliveryEstimate = {
   surchargeReasons: string[];
 };
 
+/** Unidades entregadas del producto en los últimos 30 días (para el ranking). */
+const SOLD_LAST_30_DAYS_SQL = `(SELECT COALESCE(SUM(d.quantity), 0)
+    FROM "invoiceDetail" d
+    JOIN "invoice" i ON i.id = d."invoiceId"
+    JOIN "stateType" st ON st.id = i."stateTypeId"
+    WHERE d."productId" = product.id
+      AND st.code = 'ENTR'
+      AND i."deliveredAt" > now() - interval '30 days')`;
+
+/** Filas del home: cuántas categorías y cuántos productos por fila. */
+const HOME_ROWS = 8;
+const HOME_ROW_SIZE = 10;
+/** Cuántos productos rankeados se leen para armar las filas del home. */
+const HOME_ROWS_SCAN_LIMIT = 600;
+/** Menú de la tienda: tope de productos y tamaño de "Más pedidos". */
+const MENU_LIMIT = 300;
+const MENU_POPULAR_SIZE = 6;
+
 /** Negocio público + bandera calculada de apertura (horario Colombia). */
 export type PublicOrganizational = Partial<Organizational> & { isOpen: boolean };
 
@@ -365,31 +383,7 @@ export class ExploreService {
         .setParameter('prefix', `${search}%`);
     }
 
-    const openIds = await this.openOrganizationalIds();
-    const openSql = openIds.length
-      ? `CASE WHEN organizational.id IN (${openIds.map(Number).join(',')}) THEN 0 ELSE 1 END`
-      : '0';
-    const soldSql = `(SELECT COALESCE(SUM(d.quantity), 0)
-        FROM "invoiceDetail" d
-        JOIN "invoice" i ON i.id = d."invoiceId"
-        JOIN "stateType" st ON st.id = i."stateTypeId"
-        WHERE d."productId" = product.id
-          AND st.code = 'ENTR'
-          AND i."deliveredAt" > now() - interval '30 days')`;
-    // Semilla del día en Colombia (UTC-5 fijo).
-    const daySeed = new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
-    const orderBy = search ? query.addOrderBy.bind(query) : query.orderBy.bind(query);
-    orderBy(openSql, 'ASC');
-    query
-      .addOrderBy(soldSql, 'DESC')
-      .addOrderBy('COALESCE(organizational."ratingAverage", 0)', 'DESC')
-      .addOrderBy(
-        `CASE WHEN product."createdAt" > now() - interval '7 days' THEN 0 ELSE 1 END`,
-        'ASC',
-      )
-      .addOrderBy(`md5(product.id::text || :daySeed)`, 'ASC')
-      .addOrderBy('product.id', 'ASC')
-      .setParameter('daySeed', daySeed);
+    await this.applyRanking(query, { afterSearch: !!search });
     if (params.categoryTypeId) {
       query.andWhere('product.categoryTypeId = :categoryTypeId', {
         categoryTypeId: params.categoryTypeId,
@@ -409,17 +403,207 @@ export class ExploreService {
     this.applyNearFilter(query, params.lat, params.lng);
 
     const [entities, itemCount] = await query.getManyAndCount();
-    // El cliente decide en la card si puede agregar al carrito: cada producto
-    // lleva la bandera de apertura de SU negocio.
-    for (const product of entities) {
+    this.markOpen(entities);
+    const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
+
+    return new ResponsePaginationDto(entities, pagination);
+  }
+
+  /**
+   * Filas del home por CATEGORÍA: cada fila mezcla productos de TODOS los
+   * negocios cercanos de esa categoría, con el mismo ranking del listado
+   * (abiertos, más pedidos, calificación, nuevos, rotación del día). Las
+   * categorías van de la más pedida en la zona a la menos (empate: más
+   * productos, luego nombre). Hasta `HOME_ROWS` filas de `HOME_ROW_SIZE`.
+   */
+  async homeRows(params: PaginatedExploreProductsParamsDto): Promise<{
+    rows: { categoryType: CategoryType; products: Product[] }[];
+  }> {
+    const query = this.rankedProductsQuery();
+    if (params.tagIds?.length) {
+      query.andWhere(
+        `EXISTS (
+          SELECT 1 FROM "organizationalTag" ot
+          WHERE ot."organizationalId" = organizational.id
+            AND ot."tagId" IN (:...tagIds)
+        )`,
+        { tagIds: params.tagIds },
+      );
+    }
+    this.applyNearFilter(query, params.lat, params.lng);
+    query.andWhere('product.categoryTypeId IS NOT NULL').limit(HOME_ROWS_SCAN_LIMIT);
+    await this.applyRanking(query, { afterSearch: false });
+
+    const { products, sold } = await this.productsWithSold(query);
+    this.markOpen(products);
+
+    const byCategory = new Map<
+      number,
+      { categoryType: CategoryType; products: Product[]; sold: number; total: number }
+    >();
+    for (const product of products) {
+      const category = product.categoryType;
+      if (!category) continue;
+      const row =
+        byCategory.get(category.id) ??
+        { categoryType: category, products: [], sold: 0, total: 0 };
+      row.total += 1;
+      row.sold += sold.get(product.id) ?? 0;
+      if (row.products.length < HOME_ROW_SIZE) row.products.push(product);
+      byCategory.set(category.id, row);
+    }
+    const rows = [...byCategory.values()]
+      .sort(
+        (a, b) =>
+          b.sold - a.sold ||
+          b.total - a.total ||
+          a.categoryType.name.localeCompare(b.categoryType.name, 'es'),
+      )
+      .slice(0, HOME_ROWS)
+      .map(({ categoryType, products: list }) => ({ categoryType, products: list }));
+    return { rows };
+  }
+
+  /**
+   * Menú de UN negocio por secciones (tienda del cliente): "Más pedidos"
+   * (si ya vendió algo) y una sección por categoría en orden ALFABÉTICO, con
+   * "Otros" al final para los productos sin categoría. Dentro de cada
+   * sección: más pedidos, nuevos y rotación del día. Sin paginar: un negocio
+   * tiene pocos productos (tope de seguridad `MENU_LIMIT`).
+   */
+  async storeMenu(organizationalId: number): Promise<{
+    sections: {
+      key: string;
+      title: string;
+      categoryTypeId: number | null;
+      products: Product[];
+    }[];
+  }> {
+    const exists = await this._organizationalRepository.findOne({
+      where: { id: organizationalId, isActive: true },
+    });
+    if (!exists) throw new NotFoundException('Negocio no encontrado');
+
+    const query = this.rankedProductsQuery()
+      .andWhere('product.organizationalId = :organizationalId', { organizationalId })
+      .limit(MENU_LIMIT);
+    await this.applyRanking(query, { afterSearch: false });
+    const { products, sold } = await this.productsWithSold(query);
+    this.markOpen(products);
+
+    const sections: {
+      key: string;
+      title: string;
+      categoryTypeId: number | null;
+      products: Product[];
+    }[] = [];
+
+    const popular = products
+      .filter((p) => (sold.get(p.id) ?? 0) > 0)
+      .sort((a, b) => (sold.get(b.id) ?? 0) - (sold.get(a.id) ?? 0))
+      .slice(0, MENU_POPULAR_SIZE);
+    // Solo tiene sentido si hay más productos que los "más pedidos".
+    if (popular.length && products.length > popular.length) {
+      sections.push({ key: 'popular', title: 'Más pedidos', categoryTypeId: null, products: popular });
+    }
+
+    const byCategory = new Map<number, { name: string; products: Product[] }>();
+    const others: Product[] = [];
+    for (const product of products) {
+      if (!product.categoryType) {
+        others.push(product);
+        continue;
+      }
+      const entry =
+        byCategory.get(product.categoryType.id) ??
+        { name: product.categoryType.name, products: [] };
+      entry.products.push(product);
+      byCategory.set(product.categoryType.id, entry);
+    }
+    [...byCategory.entries()]
+      .sort((a, b) => a[1].name.localeCompare(b[1].name, 'es'))
+      .forEach(([id, entry]) =>
+        sections.push({
+          key: `cat-${id}`,
+          title: entry.name,
+          categoryTypeId: id,
+          products: entry.products,
+        }),
+      );
+    if (others.length) {
+      sections.push({
+        key: 'other',
+        title: byCategory.size ? 'Otros' : 'Productos',
+        categoryTypeId: null,
+        products: others,
+      });
+    }
+    return { sections };
+  }
+
+  // ---------- ranking compartido (home, filas, menú de la tienda) ----------
+
+  /** Productos activos de negocios activos con lo que la tarjeta necesita del negocio. */
+  private rankedProductsQuery(): SelectQueryBuilder<Product> {
+    return this._productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.categoryType', 'categoryType')
+      .innerJoin('product.organizational', 'organizational')
+      .addSelect(PRODUCT_ORGANIZATIONAL_SELECT)
+      .addSelect(SOLD_LAST_30_DAYS_SQL, 'product_sold')
+      .where('product.isActive = true')
+      .andWhere('organizational.isActive = true');
+  }
+
+  /**
+   * Orden de "lo que se vende": abiertos ahora, más pedidos (30 días),
+   * calificación del negocio, nuevos (7 días) y rotación del día (semilla en
+   * hora de Colombia: estable durante el día, sin repetidos al paginar).
+   * `afterSearch`: ya hay un orderBy de relevancia de búsqueda adelante.
+   */
+  private async applyRanking(
+    query: SelectQueryBuilder<Product>,
+    { afterSearch }: { afterSearch: boolean },
+  ): Promise<void> {
+    const openIds = await this.openOrganizationalIds();
+    const openSql = openIds.length
+      ? `CASE WHEN organizational.id IN (${openIds.map(Number).join(',')}) THEN 0 ELSE 1 END`
+      : '0';
+    const daySeed = new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+    const orderBy = afterSearch ? query.addOrderBy.bind(query) : query.orderBy.bind(query);
+    orderBy(openSql, 'ASC');
+    query
+      .addOrderBy(SOLD_LAST_30_DAYS_SQL, 'DESC')
+      .addOrderBy('COALESCE(organizational."ratingAverage", 0)', 'DESC')
+      .addOrderBy(
+        `CASE WHEN product."createdAt" > now() - interval '7 days' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy(`md5(product.id::text || :daySeed)`, 'ASC')
+      .addOrderBy('product.id', 'ASC')
+      .setParameter('daySeed', daySeed);
+  }
+
+  /** Entidades + unidades vendidas (30 días) de cada producto, del mismo query. */
+  private async productsWithSold(
+    query: SelectQueryBuilder<Product>,
+  ): Promise<{ products: Product[]; sold: Map<number, number> }> {
+    const { entities, raw } = await query.getRawAndEntities();
+    const sold = new Map<number, number>();
+    for (const row of raw as { product_id: number; product_sold: string | number }[]) {
+      sold.set(Number(row.product_id), Number(row.product_sold) || 0);
+    }
+    return { products: entities, sold };
+  }
+
+  /** Cada producto lleva si SU negocio está abierto (la tarjeta lo muestra). */
+  private markOpen(products: Product[]): void {
+    for (const product of products) {
       if (product.organizational) {
         (product.organizational as Organizational & { isOpen: boolean }).isOpen =
           isBusinessOpen(product.organizational);
       }
     }
-    const pagination = new PageMetaDto({ itemCount, pageOptionsDto: params });
-
-    return new ResponsePaginationDto(entities, pagination);
   }
 
   /** Productos activos de un negocio visible, con búsqueda y filtro por categoría. */

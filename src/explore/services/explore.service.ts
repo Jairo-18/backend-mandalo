@@ -214,23 +214,53 @@ export class ExploreService {
       // lista). Las etiquetas se traen aparte más abajo, ya sin paginar.
       .leftJoinAndSelect('organizational.municipality', 'municipality')
       .where(ExploreService.VISIBLE_SQL)
-      .skip(skip)
-      .take(perPage)
-      // El cliente ve el nombre comercial; si no hay, la razón social.
-      // (Orden por columnas de la entidad: una expresión cruda rompe la
-      // subquery DISTINCT que arma TypeORM al paginar con joins.)
-      .orderBy('organizational.tradeName', params.order ?? 'ASC', 'NULLS LAST')
-      .addOrderBy('organizational.legalName', params.order ?? 'ASC');
+      // offset/limit (no skip/take): el orden usa expresiones crudas, que
+      // rompen la subquery DISTINCT del paginado con joins (gotcha §20). El
+      // join es ManyToOne, no duplica filas.
+      .offset(skip)
+      .limit(perPage);
 
-    if (params.search) {
-      const search = `%${params.search.trim()}%`;
-      query.andWhere(
-        `(organizational.legalName ILIKE :search
-          OR organizational.tradeName ILIKE :search
-          OR organizational.description ILIKE :search)`,
-        { search },
-      );
+    // Mismo criterio que los productos (no alfabético): con búsqueda, los
+    // que EMPIEZAN por lo buscado; después abiertos ahora, más pedidos (30
+    // días), mejor calificados, nuevos (14 días) y rotación del día.
+    const search = params.search?.trim();
+    if (search) {
+      query
+        .andWhere(
+          `(organizational.legalName ILIKE :search
+            OR organizational.tradeName ILIKE :search
+            OR organizational.description ILIKE :search)`,
+          { search: `%${search}%` },
+        )
+        .orderBy(
+          `CASE WHEN COALESCE(organizational.tradeName, organizational.legalName) ILIKE :prefix
+                THEN 0 ELSE 1 END`,
+          'ASC',
+        )
+        .setParameter('prefix', `${search}%`);
     }
+    const openIds = await this.openOrganizationalIds();
+    const openSql = openIds.length
+      ? `CASE WHEN organizational.id IN (${openIds.map(Number).join(',')}) THEN 0 ELSE 1 END`
+      : '0';
+    const ordersSql = `(SELECT COUNT(*)
+        FROM "invoice" i
+        JOIN "stateType" st ON st.id = i."stateTypeId"
+        WHERE i."organizationalId" = organizational.id
+          AND st.code = 'ENTR'
+          AND i."deliveredAt" > now() - interval '30 days')`;
+    const daySeed = new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+    (search ? query.addOrderBy.bind(query) : query.orderBy.bind(query))(openSql, 'ASC');
+    query
+      .addOrderBy(ordersSql, 'DESC')
+      .addOrderBy('COALESCE(organizational."ratingAverage", 0)', 'DESC')
+      .addOrderBy(
+        `CASE WHEN organizational."createdAt" > now() - interval '14 days' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy(`md5(organizational.id::text || :daySeed)`, 'ASC')
+      .addOrderBy('organizational.id', 'ASC')
+      .setParameter('daySeed', daySeed);
 
     if (params.tagIds?.length) {
       query.andWhere(

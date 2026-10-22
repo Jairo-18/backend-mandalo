@@ -289,10 +289,41 @@ export class ExploreService {
   }
 
   /**
+   * Ids de los negocios activos ABIERTOS ahora mismo. Usa la misma regla del
+   * aviso de "Cerrado" (`isBusinessOpen`, hora de Colombia) en vez de
+   * reescribir los horarios en SQL; son pocos negocios y solo se leen las
+   * columnas del horario.
+   */
+  private async openOrganizationalIds(): Promise<number[]> {
+    const rows = await this._organizationalRepository.find({
+      where: { isActive: true },
+      select: {
+        id: true,
+        openTime: true,
+        closeTime: true,
+        openDays: true,
+        temporarilyClosed: true,
+      },
+    });
+    return rows.filter((o) => isBusinessOpen(o)).map((o) => o.id);
+  }
+
+  /**
    * Búsqueda GLOBAL de productos (home del cliente): productos activos de
    * negocios activos, con el negocio embebido para mostrar "quién lo vende".
    * El search también matchea el nombre del negocio (buscar "mahoma" trae
    * todos sus productos).
+   *
+   * Orden (no alfabético: lo primero que se ve es lo que se vende):
+   *  1. Con búsqueda: primero los que EMPIEZAN por lo buscado, luego los que
+   *     lo contienen (y los que solo coinciden por negocio/descripción).
+   *  2. Negocios abiertos ahora antes que los cerrados.
+   *  3. Lo más pedido (unidades entregadas en los últimos 30 días).
+   *  4. Mejor calificación del negocio.
+   *  5. Productos nuevos (últimos 7 días) primero.
+   *  6. Rotación diaria: los empates se mezclan con una semilla que cambia
+   *     cada día (hora de Colombia) — estable durante el día, así el scroll
+   *     infinito no repite ni salta productos entre páginas.
    */
   async paginatedAllProducts(
     params: PaginatedExploreProductsParamsDto,
@@ -310,20 +341,55 @@ export class ExploreService {
       .addSelect(PRODUCT_ORGANIZATIONAL_SELECT)
       .where('product.isActive = true')
       .andWhere('organizational.isActive = true')
-      .skip(skip)
-      .take(perPage)
-      .orderBy('product.name', params.order ?? 'ASC');
+      // offset/limit (no skip/take): el orderBy con expresiones crudas rompe
+      // la subquery DISTINCT del paginado con joins (gotcha §20). Los joins
+      // son ManyToOne, no duplican filas.
+      .offset(skip)
+      .limit(perPage);
 
-    if (params.search) {
-      const search = `%${params.search.trim()}%`;
-      query.andWhere(
-        `(product.name ILIKE :search
-          OR product.description ILIKE :search
-          OR organizational.legalName ILIKE :search
-          OR organizational.tradeName ILIKE :search)`,
-        { search },
-      );
+    const search = params.search?.trim();
+    if (search) {
+      query
+        .andWhere(
+          `(product.name ILIKE :search
+            OR product.description ILIKE :search
+            OR organizational.legalName ILIKE :search
+            OR organizational.tradeName ILIKE :search)`,
+          { search: `%${search}%` },
+        )
+        .orderBy(
+          `CASE WHEN product.name ILIKE :prefix THEN 0
+                WHEN product.name ILIKE :search THEN 1 ELSE 2 END`,
+          'ASC',
+        )
+        .setParameter('prefix', `${search}%`);
     }
+
+    const openIds = await this.openOrganizationalIds();
+    const openSql = openIds.length
+      ? `CASE WHEN organizational.id IN (${openIds.map(Number).join(',')}) THEN 0 ELSE 1 END`
+      : '0';
+    const soldSql = `(SELECT COALESCE(SUM(d.quantity), 0)
+        FROM "invoiceDetail" d
+        JOIN "invoice" i ON i.id = d."invoiceId"
+        JOIN "stateType" st ON st.id = i."stateTypeId"
+        WHERE d."productId" = product.id
+          AND st.code = 'ENTR'
+          AND i."deliveredAt" > now() - interval '30 days')`;
+    // Semilla del día en Colombia (UTC-5 fijo).
+    const daySeed = new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+    const orderBy = search ? query.addOrderBy.bind(query) : query.orderBy.bind(query);
+    orderBy(openSql, 'ASC');
+    query
+      .addOrderBy(soldSql, 'DESC')
+      .addOrderBy('COALESCE(organizational."ratingAverage", 0)', 'DESC')
+      .addOrderBy(
+        `CASE WHEN product."createdAt" > now() - interval '7 days' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy(`md5(product.id::text || :daySeed)`, 'ASC')
+      .addOrderBy('product.id', 'ASC')
+      .setParameter('daySeed', daySeed);
     if (params.categoryTypeId) {
       query.andWhere('product.categoryTypeId = :categoryTypeId', {
         categoryTypeId: params.categoryTypeId,

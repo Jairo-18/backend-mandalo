@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { PromotionService } from '../services/promotion.service';
@@ -41,13 +42,19 @@ export class PromotionController {
 
   // ---------- público ----------
 
+  // Públicos e iguales para todos: caché por URL (Redis en prod, §21), como
+  // /explore. Un cambio del negocio tarda hasta 1 min en verse acá.
   @Get('feed')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60_000)
   async feed(@Query() params: PromotionFeedParamsDto) {
     const data = await this._promotionService.feed(params);
     return { statusCode: HttpStatus.OK, data };
   }
 
   @Get('business/:id')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60_000)
   async forBusiness(@Param('id', ParseIntPipe) id: number) {
     const data = await this._promotionService.forBusiness(id);
     return { statusCode: HttpStatus.OK, data };
